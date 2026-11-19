@@ -295,6 +295,20 @@ pub fn scene_with_hands(act: Act, charge: f64, view: usize) -> (Canvas, [V3; 2])
 
 /// Uma técnica no auge com o soco `fist` e o tapa `slap` dados.
 pub fn scene_of(act: Act, charge: f64, fist: Option<anim::Fist>, slap: Option<f64>, view: usize) -> (Canvas, [V3; 2]) {
+    scene_full(act, charge, fist, slap, None, 0.0, view)
+}
+
+/// A cena com a esfera do Gojo na mão (`orb`, no mundo da cena: o jogador nos pés em `0` olhando
+/// para -z, os olhos a 1,62) e o Roxo carregando há `purple` segundos.
+pub fn scene_full(
+    act: Act,
+    charge: f64,
+    fist: Option<anim::Fist>,
+    slap: Option<f64>,
+    orb: Option<V3>,
+    purple: f64,
+    view: usize,
+) -> (Canvas, [V3; 2]) {
     let first_person = view == 2;
     let mut anim = Anim::default();
     let at_act = anim::ACTS.iter().position(|a| *a == act).unwrap();
@@ -315,6 +329,15 @@ pub fn scene_of(act: Act, charge: f64, fist: Option<anim::Fist>, slap: Option<f6
         time: 0.3,
         fist,
         slap,
+        purple,
+        orb: orb.map(|orb| {
+            if first_person {
+                // Pelos olhos a câmera é a origem: o ponto relativo aos olhos.
+                anim::camera_to_first_person(sub(orb, [0.0, 1.62, 0.0]))
+            } else {
+                anim::to_model(orb, [0.0; 3], 0.0)
+            }
+        }),
         ..Default::default()
     };
     let pose = anim.pose(&moment);
@@ -396,6 +419,21 @@ fn the_combat_poses_draw() {
     ] {
         for view in 0..3 {
             tiles.push(scene_of(act, 0.0, f, slap, view).0);
+        }
+    }
+    write(&out, &tiles, 3);
+}
+
+#[test]
+#[ignore = "desenha as poses do Gojo num arquivo: SUKUNA_GOJO_OUT=arquivo.ppm"]
+fn the_gojo_poses_draw() {
+    let out = std::env::var("SUKUNA_GOJO_OUT").unwrap_or_else(|_| "/tmp/gojo.ppm".into());
+    // A esfera onde o Gojo a forma: na frente do rosto, olhando para -z.
+    let orb = crate::gojo::hand([0.0, 1.62, 0.0], [0.0, 0.0, -1.0]);
+    let mut tiles = Vec::new();
+    for (act, purple) in [(Act::Palm, 0.0), (Act::Dismantle, 0.0), (Act::Lapse, 0.0), (Act::Hollow, 0.05), (Act::Hollow, 1.0)] {
+        for view in 0..3 {
+            tiles.push(scene_full(act, 0.0, None, None, Some(orb), purple, view).0);
         }
     }
     write(&out, &tiles, 3);

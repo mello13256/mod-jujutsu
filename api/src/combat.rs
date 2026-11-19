@@ -14,6 +14,11 @@
 //! - **Aparo de mob:** se o seu soco acerta um mob até 0,2 s antes do golpe dele em você, o
 //!   golpe dele não sai e ele fica desnorteado por 1,5 s.
 //!
+//! - **Black Flash:** logo depois de um soco acertar, numa janela minúscula (0,25 s), apertar
+//!   os dois botões do mouse juntos (até 80 ms um do outro): o golpe distorce o espaço e o dano
+//!   vai a 2,5 vezes, com raios pretos e vermelhos no ponto do soco. No ar, os raios saem mais
+//!   espalhados e quem eles tocam leva um dano mínimo.
+//!
 //! A janela decide os golpes; o servidor do mundo local aplica o dano (pelo caminho dos cortes),
 //! os empurrões, o desnorteio e os projéteis rebatidos.
 
@@ -44,6 +49,17 @@ pub const GUARD: f32 = 0.6;
 /// O dano a partir do qual o soco carregado solta a onda de choque, e o raio dela.
 pub const SHOCK_DAMAGE: u32 = 10;
 pub const SHOCK_RADIUS: f64 = 3.5;
+/// O Black Flash: a janela depois do soco acertar, o tempo entre os dois botões, quanto o dano
+/// do soco vai a mais (1,5: o total fica 2,5 vezes), quanto os raios duram e até onde vão (no
+/// chão e no ar), e o dano mínimo dos raios no ar.
+pub const FLASH_WINDOW: f32 = 0.25;
+pub const FLASH_PAIR: f32 = 0.08;
+pub const FLASH_BONUS: f32 = 1.5;
+pub const FLASH_LIFE: f32 = 0.6;
+pub const FLASH_REACH: f32 = 2.2;
+pub const FLASH_AIR_REACH: f32 = 4.5;
+pub const FLASH_GRAZE: u32 = 1;
+
 /// Até onde um projétil é aparado, e quão fora da mira ele pode estar (cosseno).
 const SLAP_REACH: f64 = 4.5;
 const SLAP_CONE: f64 = 0.72;
@@ -132,6 +148,45 @@ pub struct Combat {
     /// aparados.
     pub blocked: u32,
     pub parried: u32,
+    /// O soco que acabou de acertar (quando, quem, onde e o dano): a janela do Black Flash.
+    pub landed: Option<(Instant, u32, V3, u32)>,
+    /// Quando cada botão (esquerdo, direito) desceu por último.
+    pub pressed: [Option<Instant>; 2],
+    /// Os Black Flash na tela: onde, quando, se foi no ar, e a semente.
+    pub flashes: Vec<Flash>,
+}
+
+/// Um Black Flash, para o passe desenhar.
+#[derive(Clone, Copy, Debug)]
+pub struct Flash {
+    pub at: V3,
+    pub born: Instant,
+    pub air: bool,
+    pub seed: f32,
+}
+
+impl Flash {
+    pub fn ball(&self) -> crate::sphere::Ball {
+        let age = self.born.elapsed().as_secs_f32();
+        crate::sphere::Ball {
+            center: self.at,
+            radius: if self.air { FLASH_AIR_REACH } else { FLASH_REACH },
+            kind: crate::sphere::Kind::Flash,
+            lens: 0.0,
+            reach: 1.0,
+            glow: (1.0 - age / FLASH_LIFE).clamp(0.0, 1.0),
+            spin: if self.air { 1.0 } else { 0.0 },
+            age,
+            seed: self.seed,
+            rays: 0.0,
+        }
+    }
+}
+
+/// Se os dois botões desceram juntos agora: um acabou de descer em `now` e o outro, `other`,
+/// até [`FLASH_PAIR`] antes.
+pub fn paired(other: Option<Instant>, now: Instant) -> bool {
+    other.is_some_and(|at| now.saturating_duration_since(at).as_secs_f32() <= FLASH_PAIR)
 }
 
 /// O dano de um soco carregado por `seconds`: de 1 a 4 até o soco normal (0,5 s), 6 nele, e
@@ -278,6 +333,8 @@ impl Mod {
             s.combat.punched.retain(|(_, when)| when.elapsed().as_secs_f32() < 1.0);
             s.combat.punched.push((id, now));
             s.combat.daze(id, DAZE, false);
+            // A janela do Black Flash abre agora.
+            s.combat.landed = Some((now, id, at, amount));
             // Carregado até o fim e forte o bastante: a onda de choque, que empurra e fere
             // quem está em volta do ponto do soco.
             if heavy && (amount as f32 * strength).round() as u32 >= SHOCK_DAMAGE {
@@ -308,6 +365,64 @@ impl Mod {
             host.play_local_sound("minecraft:entity.generic.explode", at, 0.6, 1.6, 0);
             host.play_local_sound("minecraft:entity.player.attack.knockback", at, 1.0, 0.6, 0);
         }
+        true
+    }
+
+    /// Um botão do mouse desceu (0 o esquerdo, 1 o direito), de mão vazia: se o outro desceu
+    /// junto, logo depois de um soco acertar, o Black Flash. Devolve se o clique foi dele.
+    pub(crate) fn black_flash_press(&self, host: &mut dyn Host, button: usize) -> bool {
+        if button > 1 || !host.playing() || !empty_hand(&*host) {
+            return false;
+        }
+        let now = Instant::now();
+        let (landed, air, seed) = {
+            let mut s = self.state.lock().unwrap();
+            let other = s.combat.pressed[1 - button];
+            s.combat.pressed[button] = Some(now);
+            let open = s.combat.landed.filter(|(at, ..)| now.saturating_duration_since(*at).as_secs_f32() <= FLASH_WINDOW);
+            // Os dois botões têm que descer depois do soco acertar.
+            let after = open.is_some_and(|(at, ..)| other.is_some_and(|other| other >= at));
+            if !paired(other, now) || !after {
+                return false;
+            }
+            s.combat.landed = None;
+            s.combat.pressed = [None, None];
+            // O botão esquerdo que desceu primeiro começou um soco: ele não sai.
+            s.combat.charge = None;
+            let seed = (s.started.elapsed().as_secs_f32() * 5.71).fract();
+            (open.unwrap(), !s.rpg.grounded(), seed)
+        };
+        let (_, id, at, amount) = landed;
+        let Some(camera) = host.camera() else {
+            return true;
+        };
+        let eye = eye_of(&*host, camera.position);
+        let look = math::look(camera.yaw, camera.pitch);
+        let entities = host.client_entities();
+        let mut s = self.state.lock().unwrap();
+        let bonus = ((amount as f32 * FLASH_BONUS).round() as u32).max(6);
+        s.hits.push(Hit { id, at, amount: bonus, pierce: false });
+        s.pushes.push((id, add(mul(look, 1.6), [0.0, 0.45, 0.0])));
+        s.combat.daze(id, 0.5, false);
+        // No ar, os raios espalhados pegam de raspão quem está perto.
+        if air {
+            let grazed: Vec<(u32, V3)> = others(&entities, eye)
+                .filter(|e| e.id != id)
+                .map(|e| (e.id, mul(add(e.bounds[0], e.bounds[1]), 0.5)))
+                .filter(|(_, middle)| len(sub(*middle, at)) < f64::from(FLASH_AIR_REACH))
+                .collect();
+            for (other, middle) in grazed {
+                s.hits.push(Hit { id: other, at: middle, amount: FLASH_GRAZE, pierce: false });
+            }
+        }
+        s.combat.flashes.retain(|flash| flash.born.elapsed().as_secs_f32() < FLASH_LIFE);
+        s.combat.flashes.push(Flash { at, born: Instant::now(), air, seed });
+        s.kick = (s.kick + 1.4).min(2.5);
+        drop(s);
+        host.play_local_sound("minecraft:entity.lightning_bolt.impact", at, 1.0, 0.6, 0);
+        host.play_local_sound("minecraft:entity.player.attack.crit", at, 1.0, 0.5, 0);
+        host.play_local_sound("minecraft:entity.generic.explode", at, 0.5, 1.8, 0);
+        host.client_action_bar(horizon_client::mod_api::Text::literal("BLACK FLASH".to_owned()), false);
         true
     }
 
@@ -342,6 +457,7 @@ impl Mod {
             let mut s = self.state.lock().unwrap();
             let now = Instant::now();
             s.combat.dazed.retain(|daze| daze.until > now);
+            s.combat.flashes.retain(|flash| flash.born.elapsed().as_secs_f32() < FLASH_LIFE);
             if !host.playing() {
                 s.combat.charge = None;
                 s.combat.guarding = false;

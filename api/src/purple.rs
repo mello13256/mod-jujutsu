@@ -1,16 +1,16 @@
 //! O Roxo (Hollow Purple) do Gojo, nas suas três formas.
 //!
-//! **Roxo**: as teclas do Azul e do Vermelho juntas (R + V), duas vezes seguidas. Na segunda,
+//! **Roxo**: as teclas do Azul e do Vermelho juntas (R + V), uma vez. Aí
 //! uma esfera azul e uma vermelha aparecem dos lados da mão e se juntam numa roxa pequena;
 //! enquanto uma das teclas fica segurada, ela carrega (a barra embaixo da mira). Soltar as duas
 //! lança: cedo, o Roxo compacto; carregado, o Roxo clássico, maior, mais longe e mais forte. Ele
 //! apaga tudo no caminho: blocos (sem deixar item) e o que estiver vivo.
 //!
 //! **Roxo V1**: um Vermelho V1 que acerta um Azul V1 parado funde os dois numa esfera roxa
-//! instável; as faíscas crescem, e em 7 segundos ela explode, ferindo todo mundo perto, o
+//! instável; ela cresce 50% em 4 segundos, solta raios roxos e em 6 segundos explode, ferindo todo mundo perto, o
 //! jogador também.
 //!
-//! **Roxo 200%**: o mesmo gesto (R + V duas vezes) com Shift. Uma esfera azul e uma vermelha
+//! **Roxo 200%**: o mesmo gesto (R + V juntas) com Shift. Uma esfera azul e uma vermelha
 //! grandes surgem atrás do jogador, passam por cima dos ombros, se fundem numa roxa enorme na
 //! frente dele e ela é lançada, apagando um túnel largo, até explodir no fim com uma onda de
 //! choque roxa.
@@ -32,12 +32,13 @@ use crate::{Hit, Mod, eye_of};
 
 /// Quanto tempo entre apertar uma tecla e a outra conta como "juntas", e entre os dois gestos.
 pub const CHORD: f32 = 0.25;
-pub const DOUBLE: f32 = 0.9;
 /// A carga: o tempo das duas esferas se juntarem, e até quando ela cresce.
 pub const CONVERGE: f32 = 0.45;
 pub const FULL: f32 = 3.0;
 /// O Roxo instável do V1: quanto dura até explodir.
-pub const UNSTABLE_SECONDS: f32 = 7.0;
+pub const UNSTABLE_SECONDS: f32 = 6.0;
+/// O Roxo instável chega ao tamanho todo (50% maior que ao nascer) aqui, e daí até explodir solta relâmpagos.
+pub const UNSTABLE_GROWN: f32 = 4.0;
 
 /// O dano que a explosão do Roxo instável dá no jogador perto, com a barra da direita em
 /// `level`: de 24 a 60.
@@ -116,7 +117,6 @@ pub struct Chord {
     pub red_down: Option<Instant>,
     pub blue_held: bool,
     pub red_held: bool,
-    pub first: Option<Instant>,
 }
 
 /// A carga do Roxo: desde quando, a semente, e onde ficam as esferas (a cada quadro).
@@ -160,9 +160,10 @@ impl Charge {
             ];
         }
         let c = charge_of(seconds);
-        // Logo depois de se juntarem, um clarão.
+        // Logo depois de se juntarem, um clarão. O tamanho é o de quando for lançado.
         let flash = (1.0 - (seconds - CONVERGE) / 0.2).max(0.0);
-        vec![ball(self.center, 0.12 + 0.2 * c, Kind::Purple, 0.2 + 0.5 * c, 1.2 + 0.4 * c + flash)]
+        let radius = Size::of(c).radius as f32;
+        vec![ball(self.center, radius, Kind::Purple, 0.2 + 0.5 * c, 1.2 + 0.4 * c + flash)]
     }
 }
 
@@ -185,9 +186,8 @@ pub struct Hollow {
 impl Hollow {
     /// O raio que aparece: sai da mão pequeno e cresce no primeiro quinto de segundo.
     pub fn shown(&self) -> f64 {
-        let t = f64::from(self.born.elapsed().as_secs_f32() / 0.2).min(1.0);
-        let start = if self.finale { 1.0 } else { 0.25 };
-        self.size.radius * (start + (1.0 - start) * t)
+        // Sai do tamanho que tinha na carga (o 200%, do da cena): não cresce no caminho.
+        self.size.radius
     }
 
     pub fn ball(&self) -> Ball {
@@ -234,11 +234,16 @@ pub struct Unstable {
 impl Unstable {
     pub fn ball(&self, seconds: f32) -> Ball {
         let t = (seconds / UNSTABLE_SECONDS).clamp(0.0, 1.0);
-        // Pulsa cada vez mais depressa, e as faíscas crescem.
+        // Cresce até 50% maior em `UNSTABLE_GROWN`; daí em diante, os relâmpagos (`rays` acima
+        // de 1) até explodir.
+        let grow = (seconds / UNSTABLE_GROWN).clamp(0.0, 1.0);
+        let eased = 1.0 - (1.0 - grow) * (1.0 - grow);
+        let storm = ((seconds - UNSTABLE_GROWN) / (UNSTABLE_SECONDS - UNSTABLE_GROWN)).clamp(0.0, 1.0);
+        // Pulsa cada vez mais depressa.
         let beat = (seconds * (4.0 + 22.0 * t * t)).sin();
         Ball {
             center: self.at,
-            radius: crate::gojo::BIG_RADIUS * (0.8 + 0.06 * beat * (0.3 + t)),
+            radius: crate::gojo::BIG_RADIUS * 0.8 * (1.0 + 0.5 * eased) * (1.0 + 0.03 * beat * storm),
             kind: Kind::Purple,
             lens: 0.1 + 0.15 * t,
             reach: 4.0,
@@ -246,7 +251,7 @@ impl Unstable {
             spin: 0.5 + 1.5 * t,
             age: seconds,
             seed: self.seed,
-            rays: 0.2 + 0.8 * t,
+            rays: if seconds < UNSTABLE_GROWN { 0.2 + 0.6 * grow } else { 1.0 + 0.3 + 0.7 * storm },
         }
     }
 }
@@ -425,7 +430,7 @@ impl Mod {
             }
             return true;
         }
-        let (chord, second, busy) = {
+        let (chord, busy) = {
             let mut s = self.state.lock().unwrap();
             // Sem o Roxo desbloqueado, R e V juntos são só o Azul e o Vermelho.
             if !s.rpg.tech_open(Tech::Purple) {
@@ -446,11 +451,7 @@ impl Mod {
                 }
             };
             let together = other.is_some_and(|at| now.duration_since(at).as_secs_f32() <= CHORD);
-            let second = together && chord.first.is_some_and(|at| now.duration_since(at).as_secs_f32() <= DOUBLE);
-            if together {
-                chord.first = if second { None } else { Some(now) };
-            }
-            (together, second, busy)
+            (together, busy)
         };
         if busy {
             // Carregando o Roxo ou no meio do 200%, as teclas são dele.
@@ -459,12 +460,8 @@ impl Mod {
         if !chord {
             return false;
         }
-        // Juntas: o que as teclas acabaram de começar se desfaz (e devolve o gasto).
+        // Juntas, uma vez só: o que as teclas acabaram de começar se desfaz (e devolve o gasto).
         self.undo_for_chord();
-        if !second {
-            host.client_action_bar(Text::literal("Roxo: R + V de novo, rápido".to_owned()), false);
-            return true;
-        }
         let shift = self.state.lock().unwrap().power.shift;
         if shift {
             self.cinema_start(host);
@@ -515,7 +512,7 @@ impl Mod {
                 Some(format!("Roxo: precisa de {need:.0} de energia"))
             } else {
                 let seed = (s.started.elapsed().as_secs_f32() * 2.71).fract();
-                let (center, right) = charge_place(eye, look);
+                let (center, right) = charge_place(eye, look, Size::of(0.0).radius);
                 s.gojo.purple.charge = Some(Charge { started: Instant::now(), seed, center, right });
                 None
             }
@@ -555,7 +552,8 @@ impl Mod {
             self.refuse(host, why);
             return;
         }
-        let from = charge_place(eye, look).0;
+        // Sai de onde a esfera da carga estava, do mesmo tamanho: a que se mira é a que se lança.
+        let from = charge_place(eye, look, size.radius).0;
         self.launch(host, from, eye, look, size, charge.seed, &camera.dimension, false);
         host.play_local_sound("minecraft:entity.warden.sonic_boom", from, 0.8 + 0.6 * c, 0.9 - 0.3 * c, 0);
         host.play_local_sound("minecraft:entity.breeze.shoot", from, 1.0, 0.5, 0);
@@ -644,7 +642,8 @@ impl Mod {
         let eye = eye_of(&*host, camera.position);
         let look = math::look(camera.yaw, camera.pitch);
         if let Some(charge) = s.gojo.purple.charge.as_mut() {
-            (charge.center, charge.right) = charge_place(eye, look);
+            let radius = Size::of(charge_of(charge.seconds())).radius;
+            (charge.center, charge.right) = charge_place(eye, look, radius);
         }
         if let Some(cinema) = s.gojo.purple.cinema.as_mut() {
             let t = cinema.born.elapsed().as_secs_f32();
@@ -800,7 +799,7 @@ impl Mod {
         let fused = {
             let mut s = self.state.lock().unwrap();
             // Sem o Roxo desbloqueado, o Vermelho V1 só passa.
-            let open = s.rpg.tech_open(Tech::Purple);
+            let open = s.rpg.gojo_refuses(Tech::Purple, "Roxo V1").is_none();
             let found = s.gojo.blues.iter().position(|blue| {
                 let age = blue.age();
                 open && blue.dimension == dimension
@@ -810,8 +809,10 @@ impl Mod {
             found.map(|index| {
                 let blue = s.gojo.blues.remove(index);
                 let at = blue.center(blue.age());
-                let terrain = blue.big.is_some_and(|big| big.terrain);
+                // A destruição de blocos como está agora, e um tremor leve na fusão.
+                let terrain = s.settings(&*host).terrain;
                 let level = s.power.level;
+                s.kick = (s.kick + 0.5).min(2.0);
                 s.rpg.practice_tech(Tech::Purple, 1);
                 s.gojo.purple.unstables.push(Unstable {
                     at,
@@ -827,7 +828,7 @@ impl Mod {
         if let Some(at) = fused {
             host.play_local_sound("minecraft:block.respawn_anchor.set_spawn", at, 2.0, 0.5, 0);
             host.play_local_sound("minecraft:entity.warden.sonic_charge", at, 1.5, 0.5, 0);
-            host.client_action_bar(Text::literal("Roxo instável: 7 segundos, saia de perto!".to_owned()), false);
+            host.client_action_bar(Text::literal("Roxo instável: 6 segundos, saia de perto!".to_owned()), false);
         }
         fused.is_some()
     }
@@ -925,17 +926,28 @@ impl Mod {
     }
 }
 
-/// Onde a carga do Roxo fica: na frente, um pouco abaixo do meio da tela, e para a direita.
-pub fn charge_place(eye: V3, look: V3) -> (V3, V3) {
+/// Onde a carga do Roxo fica, com o raio `radius` que ela tem agora: na frente das mãos, longe o
+/// bastante para a esfera inteira caber na frente do Gojo (a borda a 1,2 bloco dos olhos), e para
+/// a direita.
+pub fn charge_place(eye: V3, look: V3, radius: f64) -> (V3, V3) {
     let right = norm(cross(look, [0.0, 1.0, 0.0]));
     let right = if right.iter().all(|v| v.is_finite()) { right } else { [-1.0, 0.0, 0.0] };
-    let center = add(add(eye, mul(look, 1.4)), [0.0, -0.18, 0.0]);
+    let center = add(add(eye, mul(look, 1.2 + radius * 1.15)), [0.0, -0.18, 0.0]);
     (center, right)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_unstable_grows_half_again_then_throws_lightning() {
+        let unstable = Unstable { at: [0.0; 3], born: Instant::now(), dimension: String::new(), seed: 0.3, terrain: true, level: 0.0 };
+        let (start, grown) = (unstable.ball(0.0), unstable.ball(UNSTABLE_GROWN));
+        assert!((grown.radius / start.radius - 1.5).abs() < 0.05, "{} → {}", start.radius, grown.radius);
+        assert!(start.rays < 1.0 && unstable.ball(UNSTABLE_GROWN - 0.1).rays < 1.0, "sem relâmpagos antes");
+        assert!(unstable.ball(UNSTABLE_GROWN + 0.5).rays > 1.0, "relâmpagos depois");
+    }
 
     #[test]
     fn the_charge_goes_from_compact_to_classic() {

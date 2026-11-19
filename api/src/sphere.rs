@@ -34,6 +34,9 @@ pub enum Kind {
     Void,
     /// Uma ondulação na água do Vazio: `center` onde, `radius` a força, `age` a idade.
     Ripple,
+    /// O Black Flash: `center` o golpe, `radius` até onde vão os raios pretos, `glow` quanto
+    /// aparece, `spin` 1 no ar (mais raios, mais espalhados).
+    Flash,
 }
 
 /// Uma esfera para desenhar: onde está no mundo, o raio, a força da lente (1 como o buraco
@@ -99,6 +102,7 @@ pub fn table(balls: &[Ball], camera: V3, inverse: [f32; 16]) -> Vec<f32> {
             Kind::Fold => 5.0,
             Kind::Void => 6.0,
             Kind::Ripple => 7.0,
+            Kind::Flash => 8.0,
         };
         out.extend_from_slice(&[at[0] as f32, at[1] as f32, at[2] as f32, ball.radius]);
         out.extend_from_slice(&[kind, ball.lens, ball.age, ball.seed]);
@@ -356,12 +360,23 @@ mod tests {
         // O chão xadrez 1,62 abaixo dos olhos e, no fundo, um céu que clareia para baixo.
         let mut depths = Vec::with_capacity((size[0] * size[1]) as usize);
         let mut pixels = Vec::with_capacity((size[0] * size[1] * 4) as usize);
+        // No teste do Vazio, um pilar magenta a 40 blocos (fora da esfera): formado, ele não pode aparecer.
+        let pillar = std::env::var("SUKUNA_SPHERE_VOID").is_ok();
         for y in 0..size[1] {
             for x in 0..size[0] {
                 let ndc = [(x as f32 + 0.5) / size[0] as f32 * 2.0 - 1.0, 1.0 - (y as f32 + 0.5) / size[1] as f32 * 2.0];
                 let h = apply(&inverse, [ndc[0], ndc[1], 0.5, 1.0]);
                 let ray = crate::math::norm([f64::from(h[0] / h[3]), f64::from(h[1] / h[3]), f64::from(h[2] / h[3])]);
-                if ray[1] < -1e-4 {
+                let hit = (pillar && ray[2] > 1e-4).then(|| 40.0 / ray[2]).filter(|t| {
+                    let p = crate::math::mul(ray, *t);
+                    (-8.0..-2.0).contains(&p[0]) && (-1.62..9.0).contains(&p[1])
+                });
+                if let Some(t) = hit {
+                    let p = crate::math::mul(ray, t);
+                    let clip = apply(&view_proj, [p[0] as f32, p[1] as f32, p[2] as f32, 1.0]);
+                    depths.push(clip[2] / clip[3]);
+                    pixels.extend_from_slice(&[255, 0, 255, 255]);
+                } else if ray[1] < -1e-4 {
                     let d = -1.62 / ray[1];
                     let p = [(ray[0] * d) as f32, (ray[1] * d) as f32, (ray[2] * d) as f32, 1.0];
                     let clip = apply(&view_proj, p);
@@ -516,7 +531,11 @@ mod tests {
                     terrain: true,
                     level: 0.5,
                 };
-                scenes = vec![grow(charge.balls(0.25)), grow(charge.balls(2.8)), vec![hollow.ball()], vec![unstable.ball(5.5)]];
+                // Quase cheia: do tamanho que vai sair, longe o bastante para caber na frente.
+                let mut full = charge.clone();
+                let radius = crate::purple::Size::of(crate::purple::charge_of(2.8)).radius;
+                full.center = crate::purple::charge_place([0.0; 3], crate::math::norm([0.0, -0.1, 1.0]), radius).0;
+                scenes = vec![grow(charge.balls(0.25)), full.balls(2.8), vec![hollow.ball()], vec![unstable.ball(5.5)]];
             }
         }
         // SUKUNA_SPHERE_MUGEN: o campo do Mugen sozinho, com as dobras de três coisas chegando
@@ -539,6 +558,16 @@ mod tests {
             mugen.folds = vec![fold(-1.0, 2.0, 1.0), fold(0.3, 2.2, 1.0), fold(1.2, 1.9, 1.0)];
             let close = mugen.balls("");
             scenes = vec![field, some, close, mugen.balls("")[1..2].to_vec()];
+        }
+        // SUKUNA_SPHERE_FLASH: o Black Flash no chão (no começo e no meio) e no ar (idem).
+        if std::env::var("SUKUNA_SPHERE_FLASH").is_ok() {
+            let flash = |air: bool, age: f32| {
+                let mut ball = crate::combat::Flash { at: [0.3, -0.4, 3.0], born: std::time::Instant::now(), air, seed: 0.42 }.ball();
+                ball.age = age;
+                ball.glow = (1.0 - age / crate::combat::FLASH_LIFE).clamp(0.0, 1.0);
+                vec![ball]
+            };
+            scenes = vec![flash(false, 0.04), flash(false, 0.3), flash(true, 0.04), flash(true, 0.3)];
         }
         // SUKUNA_SPHERE_VOID: o Vazio crescendo em volta (de dentro), o clarão, formado com
         // ondulações na água, e visto de fora.
@@ -582,7 +611,7 @@ mod tests {
             queue.write_texture(color.as_image_copy(), &pixels, layout(4), extent);
             let ball = scene[0];
             // O Vazio muda a tela toda (é o mundo em volta): não confere o que fica longe.
-            let alone = scene.len() == 1 && ball.kind != Kind::Void;
+            let alone = scene.len() == 1 && !matches!(ball.kind, Kind::Void | Kind::Flash);
             let table = table(&scene, camera, inverse);
             let frame = frame(view_proj, inverse, size, 3.0 + age, scene.len(), true);
             let mut encoder = device.create_command_encoder(&Default::default());
@@ -632,7 +661,7 @@ mod tests {
                 Kind::Blue => middle[2] > middle[0] + 40 && middle[2] > 150,
                 Kind::Red => middle[0] > middle[2] + 40 && middle[0] > 150,
                 Kind::Purple => middle[0] > middle[1] + 40 && middle[2] > middle[1] + 40,
-                Kind::Shock | Kind::Field | Kind::Fold | Kind::Void | Kind::Ripple => true,
+                Kind::Shock | Kind::Field | Kind::Fold | Kind::Void | Kind::Ripple | Kind::Flash => true,
             };
             // Até onde a lente vai: o raio de cada pixel passa a que distância do centro.
             let reach = f64::from(ball.reach * ball.radius);
@@ -656,6 +685,26 @@ mod tests {
                         }
                     }
                 }
+            }
+            // Os pixels do pilar (onde a cena tinha o magenta) que ainda são magenta: quase igual
+            // (formado: nenhum) ou puxado para magenta (formando: a película só tinge).
+            let pillar_at = |x: usize, y: usize| pixels[(y * size[0] as usize + x) * 4..][..3] == [255, 0, 255];
+            let still = |strict: bool| {
+                (0..size[1] as usize)
+                    .flat_map(|y| (0..size[0] as usize).map(move |x| (x, y)))
+                    .filter(|&(x, y)| pillar_at(x, y))
+                    .filter(|&(x, y)| {
+                        let p = px(x, y).map(i32::from);
+                        if strict { p[0] > 225 && p[1] < 30 && p[2] > 225 } else { p[0] > p[1] + 100 && p[2] > p[1] + 100 }
+                    })
+                    .count()
+            };
+            let magenta = still(ball.lens > 0.5);
+            if pillar && ball.kind == Kind::Void && ball.lens > 0.5 {
+                assert_eq!(magenta, 0, "formado, nada de fora aparece ({magenta} pixels do pilar)");
+            }
+            if pillar && ball.kind == Kind::Void && ball.lens < 0.5 && ball.radius < 8.0 {
+                assert!(magenta > 100, "formando, o mundo de fora ainda aparece além da parede ({magenta})");
             }
             checks.push((age, blue, middle, changed, far_changed));
             shots.push(data);

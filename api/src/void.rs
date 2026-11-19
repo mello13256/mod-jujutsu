@@ -37,6 +37,10 @@ pub const FLASH: f32 = 0.35;
 pub const END: f32 = 1.2;
 /// Quantos ticks dura.
 pub const TICKS: u32 = 300;
+/// Depois do fim, quanto tempo os paralisados ainda ficam parados antes de voltar.
+pub const HOLD_AFTER: f32 = 2.0;
+/// A parede: a que distância dela o Gojo começa a ser empurrado de volta para dentro.
+const WALL: f64 = 1.2;
 /// O gasto ao abrir (manter gasta como o domínio do Sukuna) e a recarga.
 pub const BASE_COST: f32 = 60.0;
 pub const SHARE: f32 = 0.12;
@@ -75,6 +79,18 @@ const PROJECTILES: [&str; 20] = [
 pub fn freezes(kind: &str) -> bool {
     let name = kind.rsplit(':').next().unwrap_or(kind);
     !(name == "player" || PROJECTILES.contains(&name))
+}
+
+/// O empurrão de volta para dentro quando `eye` chega perto da parede (ou passou dela).
+pub fn inward(center: V3, radius: f64, eye: V3) -> Option<[f32; 3]> {
+    let to = sub(eye, center);
+    let d = len(to);
+    let gap = d - (radius - WALL);
+    if radius <= WALL * 2.0 || gap <= 0.0 || d < 1e-6 {
+        return None;
+    }
+    let k = -(0.25 + 0.3 * gap) / d;
+    Some([(to[0] * k) as f32, (to[1] * k) as f32, (to[2] * k) as f32])
 }
 
 /// O que o Vazio custa ao abrir, com a barra da direita em `level`.
@@ -251,7 +267,8 @@ impl Mod {
     pub(crate) fn void_frame(&self, host: &mut dyn Host) {
         let (interrupted, open) = {
             let mut s = self.state.lock().unwrap();
-            if s.gojo.void.as_ref().is_some_and(Void::gone) {
+            // Some só depois de encolher e de soltar quem estava preso.
+            if s.gojo.void.as_ref().is_some_and(|void| void.gone() && void.thawed) {
                 s.gojo.void = None;
             }
             let Some(since) = s.gojo.void_cast else {
@@ -334,6 +351,7 @@ impl Mod {
 
     /// A cada tick da janela: o tempo, o gasto, e as ondulações de quem anda na água.
     pub(crate) fn void_tick(&self, host: &mut dyn Host) {
+        let mut eye = None;
         let walkers: Vec<(u32, V3)> = {
             let s = self.state.lock().unwrap();
             if s.gojo.void.as_ref().is_none_or(|void| !void.active()) {
@@ -343,11 +361,23 @@ impl Mod {
             let mut walkers: Vec<(u32, V3)> =
                 host.client_entities().iter().filter(|e| e.alive && e.player_uuid.is_none()).map(|e| (e.id, e.position)).collect();
             if let Some(camera) = host.camera() {
-                let eye = eye_of(&*host, camera.position);
-                walkers.push((0, [eye[0], eye[1] - 1.62, eye[2]]));
+                let at = eye_of(&*host, camera.position);
+                walkers.push((0, [at[0], at[1] - 1.62, at[2]]));
+                eye = Some(at);
             }
             walkers
         };
+        // O domínio é fechado: perto da parede, o Gojo é empurrado de volta para o meio.
+        let push = {
+            let s = self.state.lock().unwrap();
+            match (s.gojo.void.as_ref(), eye) {
+                (Some(void), Some(eye)) if void.dimension == s.dimension => inward(void.center, void.drawn_radius(), eye),
+                _ => None,
+            }
+        };
+        if let Some(push) = push {
+            host.push_player(push);
+        }
         let mut s = self.state.lock().unwrap();
         if s.paused() {
             return;
@@ -401,7 +431,19 @@ impl Mod {
             (void.center, void.drawn_radius(), void.active(), void.frozen.clone())
         };
         if !active {
-            self.void_release(host);
+            // Os presos ficam parados mais um pouco, e só então voltam.
+            let held = self
+                .state
+                .lock()
+                .unwrap()
+                .gojo
+                .void
+                .as_ref()
+                .and_then(|void| void.ended)
+                .is_some_and(|at| at.elapsed().as_secs_f32() < HOLD_AFTER);
+            if !held {
+                self.void_release(host);
+            }
             return;
         }
         let mut caught = Vec::new();
@@ -516,6 +558,16 @@ mod tests {
         assert!(v.drawn_radius() < 20.0 && v.drawn_radius() > 0.0 && !v.formed() && !v.gone());
         v.ended = Some(Instant::now() - std::time::Duration::from_secs_f32(END + 0.01));
         assert!(v.gone() && v.drawn_radius() == 0.0);
+    }
+
+    #[test]
+    fn near_the_wall_the_gojo_is_pushed_back_in() {
+        let center = [0.0, 64.0, 0.0];
+        assert_eq!(inward(center, 20.0, [5.0, 65.0, 0.0]), None, "no meio, livre");
+        let push = inward(center, 20.0, [19.5, 65.6, 0.0]).expect("na parede");
+        assert!(push[0] < -0.25, "para dentro: {push:?}");
+        let out = inward(center, 20.0, [23.0, 65.6, 0.0]).unwrap();
+        assert!(out[0] < push[0], "fora, mais forte: {out:?}");
     }
 
     #[test]

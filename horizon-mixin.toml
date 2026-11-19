@@ -1,9 +1,9 @@
-# Sukuna: Desmantelar. Um mod nativo do tipo "trait mod" (docs/native-mods.md, "Trait mods").
+# Jujutsu Horizon (antes "Sukuna"): Sukuna e Gojo. Um mod nativo do tipo "trait mod" (docs/native-mods.md, "Trait mods").
 # Para compilar e jogar:
 #   horizon-launcher native-build <esta pasta> --trust-native-code
 [mod]
 id = "sukuna"
-version = "0.29.0"
+version = "0.30.0"
 
 # Sem pin, o launcher compila no Horizon que a instância joga. O mod foi escrito e checado
 # no Nightly de 13/11/2026; se um Nightly mais novo não compilar, tire o "#" das duas linhas

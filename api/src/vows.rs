@@ -5,7 +5,7 @@
 //! falta). Os bônus de vários pactos ao mesmo tempo se somam, e valem para todo dano do mod
 //! (técnicas e socos). O tempo só corre com o jogo rodando, e fica gravado com o mundo.
 
-use crate::progress::Ability;
+use crate::progress::{Ability, Character};
 
 /// O que um pacto proíbe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,9 +16,16 @@ pub enum Forbid {
     Reverse,
     /// Toda técnica, a reversa inclusive: só os punhos.
     Techniques,
+    /// O Roxo do Gojo (o comum, o V1 e o 200%).
+    Purple,
+    /// O Mugen do Gojo.
+    Mugen,
+    /// Nada: o preço é metade da vida máxima enquanto o pacto dura.
+    Life,
 }
 
-/// Um pacto: o nome, a restrição, por quanto tempo e o dano a mais em troca.
+/// Um pacto: o nome, a restrição, por quanto tempo, o dano a mais em troca e de quem é (None:
+/// dos dois personagens).
 #[derive(Clone, Copy, Debug)]
 pub struct Vow {
     pub name: &'static str,
@@ -26,15 +33,18 @@ pub struct Vow {
     pub forbids: Forbid,
     pub minutes: u32,
     pub bonus: f32,
+    pub who: Option<Character>,
 }
 
-pub const VOWS: [Vow; 4] = [
+/// Os pactos, na ordem em que o mundo os grava (os novos sempre no fim).
+pub const VOWS: [Vow; 8] = [
     Vow {
         name: "Sem expansão de domínio",
         rule: "não abrir o domínio por 10 minutos",
         forbids: Forbid::Ability(Ability::Domain),
         minutes: 10,
         bonus: 0.30,
+        who: None,
     },
     Vow {
         name: "Sem Flecha de Fogo",
@@ -42,6 +52,7 @@ pub const VOWS: [Vow; 4] = [
         forbids: Forbid::Ability(Ability::Fuga),
         minutes: 10,
         bonus: 0.20,
+        who: Some(Character::Sukuna),
     },
     Vow {
         name: "Sem técnica reversa",
@@ -49,6 +60,7 @@ pub const VOWS: [Vow; 4] = [
         forbids: Forbid::Reverse,
         minutes: 10,
         bonus: 0.25,
+        who: None,
     },
     Vow {
         name: "Só os punhos",
@@ -56,6 +68,39 @@ pub const VOWS: [Vow; 4] = [
         forbids: Forbid::Techniques,
         minutes: 5,
         bonus: 0.60,
+        who: None,
+    },
+    Vow {
+        name: "Sem Vazio Roxo",
+        rule: "não usar o Roxo (nem o V1, nem o 200%) por 10 minutos",
+        forbids: Forbid::Purple,
+        minutes: 10,
+        bonus: 0.25,
+        who: Some(Character::Gojo),
+    },
+    Vow {
+        name: "Corpo como preço",
+        rule: "metade da vida máxima por 5 minutos",
+        forbids: Forbid::Life,
+        minutes: 5,
+        bonus: 0.35,
+        who: None,
+    },
+    Vow {
+        name: "Sem Cleave",
+        rule: "não usar o Cleave nem o corte de teia por 10 minutos",
+        forbids: Forbid::Ability(Ability::Cleave),
+        minutes: 10,
+        bonus: 0.15,
+        who: Some(Character::Sukuna),
+    },
+    Vow {
+        name: "Sem Infinito",
+        rule: "não ligar o Mugen por 10 minutos",
+        forbids: Forbid::Mugen,
+        minutes: 10,
+        bonus: 0.15,
+        who: Some(Character::Gojo),
     },
 ];
 
@@ -102,23 +147,41 @@ impl Vows {
             .find(|(vow, left)| *left > 0.0 && what(vow.forbids))
     }
 
-    /// Se um pacto proíbe a técnica `ability`: o aviso.
+    /// Se um pacto proíbe a técnica `ability`: o aviso. O do Cleave vale também para o corte
+    /// de teia, que sai dele.
     pub fn forbids(&self, ability: Ability) -> Option<String> {
-        self.blocking(|forbid| forbid == Forbid::Techniques || forbid == Forbid::Ability(ability))
-            .map(|(vow, left)| format!("Pacto \"{}\": {} ainda ({})", vow.name, ability.name(), clock(left)))
+        let also = if ability == Ability::Web { Some(Ability::Cleave) } else { None };
+        self.blocking(|forbid| {
+            forbid == Forbid::Techniques || forbid == Forbid::Ability(ability) || also.is_some_and(|a| forbid == Forbid::Ability(a))
+        })
+        .map(|(vow, left)| format!("Pacto \"{}\": {} ainda ({})", vow.name, ability.name(), clock(left)))
     }
 
-    /// Se um pacto proíbe uma técnica do Gojo de nome `name` ("Só os punhos"; o do domínio
-    /// também vale para o Vazio Ilimitado, que pergunta pelos dois): o aviso.
+    /// Se um pacto proíbe uma técnica do Gojo de nome `name` ("Só os punhos", e o do Roxo para
+    /// os Roxos e o do Mugen para o Mugen; o do domínio também vale para o Vazio Ilimitado, que
+    /// pergunta pelos dois): o aviso.
     pub fn forbids_gojo(&self, name: &str) -> Option<String> {
-        self.blocking(|forbid| forbid == Forbid::Techniques)
-            .map(|(vow, left)| format!("Pacto \"{}\": {name} ainda ({})", vow.name, clock(left)))
+        let purple = name.starts_with("Roxo");
+        let mugen = name == "Mugen";
+        self.blocking(|forbid| {
+            forbid == Forbid::Techniques || (purple && forbid == Forbid::Purple) || (mugen && forbid == Forbid::Mugen)
+        })
+        .map(|(vow, left)| format!("Pacto \"{}\": {name} ainda ({})", vow.name, clock(left)))
     }
 
-    /// Se o pacto `index` vale para `character`: o da Flecha de fogo é só do Sukuna.
-    pub fn fits(index: usize, character: Option<crate::progress::Character>) -> bool {
-        let fuga = VOWS.get(index).is_some_and(|vow| vow.forbids == Forbid::Ability(Ability::Fuga));
-        !(fuga && character == Some(crate::progress::Character::Gojo))
+    /// Se o pacto `index` aparece para `character`: cada personagem vê os seus e os dos dois.
+    pub fn fits(index: usize, character: Option<Character>) -> bool {
+        VOWS.get(index).is_some_and(|vow| vow.who.is_none() || vow.who == character)
+    }
+
+    /// Os pactos que `character` vê, na ordem.
+    pub fn shown(character: Option<Character>) -> Vec<usize> {
+        (0..VOWS.len()).filter(|index| Self::fits(*index, character)).collect()
+    }
+
+    /// Se o pacto da vida está em vigor (a vida máxima pela metade).
+    pub fn halves_life(&self) -> bool {
+        self.blocking(|forbid| forbid == Forbid::Life).is_some()
     }
 
     /// Se um pacto proíbe a técnica reversa: o aviso.
@@ -183,12 +246,36 @@ mod tests {
     }
 
     #[test]
+    fn each_character_sees_its_own_vows_and_the_new_ones_work() {
+        let sukuna = Vows::shown(Some(Character::Sukuna));
+        let gojo = Vows::shown(Some(Character::Gojo));
+        let name = |i: usize| VOWS[i].name;
+        assert!(sukuna.iter().any(|i| name(*i) == "Sem Flecha de Fogo") && !gojo.iter().any(|i| name(*i) == "Sem Flecha de Fogo"));
+        assert!(gojo.iter().any(|i| name(*i) == "Sem Vazio Roxo") && !sukuna.iter().any(|i| name(*i) == "Sem Vazio Roxo"));
+        assert!(sukuna.len() >= 6 && gojo.len() >= 6);
+        let mut vows = Vows::default();
+        let purple = VOWS.iter().position(|v| v.forbids == Forbid::Purple).unwrap();
+        vows.accept(purple);
+        assert!(vows.forbids_gojo("Roxo").is_some() && vows.forbids_gojo("Roxo 200%").is_some());
+        assert!(vows.forbids_gojo("Azul").is_none() && vows.forbids_gojo("Mugen").is_none());
+        let life = VOWS.iter().position(|v| v.forbids == Forbid::Life).unwrap();
+        assert!(!vows.halves_life());
+        vows.accept(life);
+        assert!(vows.halves_life() && vows.forbids(Ability::Dismantle).is_none());
+        let cleave = VOWS.iter().position(|v| v.forbids == Forbid::Ability(Ability::Cleave)).unwrap();
+        vows.accept(cleave);
+        assert!(vows.forbids(Ability::Web).is_some(), "o corte de teia sai do Cleave");
+    }
+
+    #[test]
     fn the_time_left_is_saved_with_the_world() {
         let mut vows = Vows::default();
         vows.accept(1);
         vows.pass(75.5);
         let text = vows.to_text();
-        assert_eq!(text, "0,525,0,0");
+        assert_eq!(text, "0,525,0,0,0,0,0,0");
+        // Um mundo de antes dos pactos novos lê igual.
+        assert_eq!(Vows::from_text("0,525,0,0").left[1], 525.0);
         assert_eq!(Vows::from_text(&text).left[1], 525.0);
         assert_eq!(Vows::from_text("lixo"), Vows::default());
         assert_eq!(clock(65.2), "1:06");

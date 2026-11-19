@@ -2944,6 +2944,11 @@ fn a_new_world_asks_for_the_character_first_and_keeps_the_choice() {
     let mut ran = false;
     horizon_client::mod_api::dispatch_command(&mut game, &mods, "sukuna personagem goku", &mut ran);
     assert_eq!(the_mod.state.lock().unwrap().rpg.progress.character, Some(crate::progress::Character::Sukuna));
+    // O nome novo do comando também.
+    let mut ran = false;
+    horizon_client::mod_api::dispatch_command(&mut game, &mods, "jujutsu personagem gojo", &mut ran);
+    assert!(ran);
+    assert_eq!(the_mod.state.lock().unwrap().rpg.progress.character, Some(crate::progress::Character::Gojo));
 }
 
 #[test]
@@ -3069,6 +3074,15 @@ fn shift_and_the_blue_key_make_the_big_blue_that_trails_the_aim_and_tears_blocks
     }
     // O chão do jogador fica.
     assert_eq!(game.now([0, 63, 0]), "minecraft:stone");
+    // O que ele já absorveu é destruído: um bloco que chega ao meio some; um ainda longe, não.
+    game.entities.push(mob(50, "minecraft:falling_block", [-8.5, 64.2, 0.5]));
+    game.entities.push(mob(51, "minecraft:falling_block", [-8.5, 64.0, 7.0]));
+    for id in [50, 51] {
+        game.known.insert(id, u128::from(id));
+    }
+    tick(&mut game, &mods);
+    assert!(!game.entities.iter().any(|e| e.id == 50), "destruído");
+    assert!(game.entities.iter().any(|e| e.id == 51), "ainda a caminho");
     // Um segundo V1 não sai enquanto há um no ar.
     let hints = game.hints;
     dispatch_key(&mut game, &mods, "key.keyboard.left.shift", true);
@@ -3103,8 +3117,9 @@ fn the_red_charges_in_stages_and_its_blast_pushes_away() {
     }
     assert_eq!(game.hints, hints + 1);
     // Um segundo de carga, com a barra da direita cheia: o segundo estágio (com o som dele) e,
-    // solta, a explosão na frente, com metade da força e o raio no máximo, 5 blocos.
+    // solta, a explosão em volta do Gojo, com metade da força e o raio no máximo, 5 blocos.
     the_mod.state.lock().unwrap().power.level = 1.0;
+    game.entities[0] = mob(7, "minecraft:zombie", [0.5, 64.0, 3.5]);
     dispatch_key(&mut game, &mods, "key.keyboard.v", true);
     the_mod.state.lock().unwrap().gojo.red.charge.as_mut().unwrap().started -= Duration::from_secs(1);
     tick(&mut game, &mods);
@@ -3117,13 +3132,17 @@ fn the_red_charges_in_stages_and_its_blast_pushes_away() {
         assert!((burst.power - 0.5).abs() < 0.02, "{}", burst.power);
         assert_eq!(burst.blast.push_range, 5.0);
         assert_eq!(burst.blast.hurt_range, 5.0);
-        assert!((burst.at[2] - (EYE[2] + crate::red::AHEAD)).abs() < 1e-6, "{:?}", burst.at);
+        assert!((burst.at[2] - EYE[2]).abs() < 1e-6 && (burst.at[1] - (EYE[1] - 0.7)).abs() < 1e-6, "no Gojo: {:?}", burst.at);
         assert!(s.rpg.energy < energy - 1.0, "gastou");
     }
     assert!(game.sounds.iter().any(|s| s == "minecraft:entity.generic.explode"));
-    // No servidor, uma vez: o zumbi, três blocos e meio à frente da explosão, é jogado para longe.
+    // No servidor, uma vez: o zumbi, três blocos à frente, é jogado para longe; o chão em volta
+    // vira cratera, menos o que está sob os pés do Gojo, e ele não leva dano.
     game.velocities.clear();
     tick(&mut game, &mods);
+    assert_eq!(game.now([2, 63, 0]), "minecraft:air", "a cratera em volta");
+    assert_eq!(game.now([0, 63, 0]), "minecraft:stone", "o chão sob os pés fica");
+    assert!(!game.commands.iter().any(|c| c.starts_with("damage 00000000-0000-0000-0000-000000000001")), "{:?}", game.commands);
     let pushed: Vec<_> = game.velocities.iter().filter(|(id, _)| *id == 7).collect();
     assert_eq!(pushed.len(), 1, "{:?}", game.velocities);
     assert!(pushed[0].1[2] > 0.5 && pushed[0].1[1] > 0.0, "{:?}", pushed[0].1);
@@ -3200,39 +3219,42 @@ fn purple_gesture(game: &mut Game, mods: &[Box<dyn Hooks>], release: bool) {
 }
 
 #[test]
-fn r_and_v_together_twice_charge_the_purple_and_it_erases_its_path() {
+fn r_and_v_together_once_charge_the_purple_and_it_erases_its_path() {
     let (the_mod, mods, mut game) = paying_game(0);
     game.holding = Some("minecraft:stone".into());
     as_gojo(the_mod);
     tick(&mut game, &mods);
     let energy = the_mod.state.lock().unwrap().rpg.energy;
-    // A primeira vez: o Azul que R começou se desfaz (e devolve a energia); nada mais.
-    purple_gesture(&mut game, &mods, true);
-    {
-        let s = the_mod.state.lock().unwrap();
-        assert!(s.gojo.blues.is_empty() && s.gojo.red.charge.is_none() && s.gojo.purple.charge.is_none(), "{} {:?} {:?}", s.gojo.blues.len(), s.gojo.red.charge, s.gojo.purple.chord);
-        assert!((s.rpg.energy - energy).abs() < 0.5, "devolveu");
-    }
-    // A segunda, logo depois: as duas esferas aparecem e a carga começa, enquanto uma tecla
-    // ficar segurada.
+    // Uma vez só: o Azul que R começou se desfaz (e devolve a energia), as duas esferas aparecem
+    // e a carga começa, enquanto uma tecla ficar segurada.
     purple_gesture(&mut game, &mods, false);
     {
         let s = the_mod.state.lock().unwrap();
-        assert!(s.gojo.blues.is_empty());
+        assert!(s.gojo.blues.is_empty() && s.gojo.red.charge.is_none(), "nem Azul nem Vermelho");
         let charge = s.gojo.purple.charge.as_ref().expect("carregando");
         assert_eq!(charge.balls(0.1).len(), 2);
-        assert!((s.rpg.energy - energy).abs() < 0.5, "a carga ainda não gasta");
+        assert!((s.rpg.energy - energy).abs() < 0.5, "devolveu, e a carga ainda não gasta");
     }
     dispatch_key(&mut game, &mods, "key.keyboard.v", false);
     assert!(the_mod.state.lock().unwrap().gojo.purple.charge.is_some(), "R ainda segurada");
-    // Carregado até o fim: o clássico.
+    // Carregado até o fim: o clássico. A esfera mirada é do tamanho da lançada, e sai de onde
+    // ela estava.
     the_mod.state.lock().unwrap().gojo.purple.charge.as_mut().unwrap().started -= Duration::from_secs(4);
+    dispatch_frame(&mut game, &mods, Duration::from_millis(16));
+    let (aimed, aimed_at) = {
+        let s = the_mod.state.lock().unwrap();
+        let charge = s.gojo.purple.charge.as_ref().unwrap();
+        (charge.balls(charge.seconds())[0].radius, charge.center)
+    };
     dispatch_key(&mut game, &mods, "key.keyboard.r", false);
     {
         let s = the_mod.state.lock().unwrap();
         assert!(s.gojo.purple.charge.is_none());
         assert_eq!(s.gojo.purple.hollows.len(), 1);
         assert_eq!(s.gojo.purple.hollows[0].size, crate::purple::Size::of(1.0));
+        let flown = s.gojo.purple.hollows[0].ball();
+        assert!((flown.radius - aimed).abs() < 1e-4, "mirada {aimed}, lançada {}", flown.radius);
+        assert!(crate::math::len(crate::math::sub(flown.center, aimed_at)) < 0.5, "sai de onde estava");
         assert!(s.rpg.energy < energy - 1.0, "gastou");
         assert!(s.gojo.blues.is_empty() && s.gojo.red.charge.is_none(), "nem Azul nem Vermelho");
     }
@@ -3274,7 +3296,6 @@ fn a_red_v1_through_a_parked_big_blue_makes_the_unstable_purple_that_hurts_every
         blue.born -= Duration::from_secs(1);
         let big = blue.big.as_mut().unwrap();
         big.pos = [EYE[0], EYE[1], EYE[2] + 6.0];
-        big.terrain = false;
     }
     // O Vermelho V1 na direção dele.
     dispatch_key(&mut game, &mods, "key.keyboard.v", true);
@@ -3296,9 +3317,12 @@ fn a_red_v1_through_a_parked_big_blue_makes_the_unstable_purple_that_hurts_every
             s.gojo.red.shots.first().map(|shot| shot.pos)
         );
         assert_eq!(s.gojo.purple.unstables.len(), 1);
+        assert!(s.kick > 0.3, "um tremor leve na fusão");
     }
-    // Sete segundos depois, explode: o jogador, a seis blocos, também leva dano.
-    the_mod.state.lock().unwrap().gojo.purple.unstables[0].born -= Duration::from_secs(7);
+    assert_eq!(game.now([0, 65, 10]), "minecraft:stone");
+    // Seis segundos depois, explode: o jogador, a seis blocos, também leva dano, e os blocos em
+    // volta somem.
+    the_mod.state.lock().unwrap().gojo.purple.unstables[0].born -= Duration::from_secs_f32(crate::purple::UNSTABLE_SECONDS + 0.05);
     tick(&mut game, &mods);
     {
         let s = the_mod.state.lock().unwrap();
@@ -3310,6 +3334,7 @@ fn a_red_v1_through_a_parked_big_blue_makes_the_unstable_purple_that_hurts_every
         "{:?}",
         game.commands
     );
+    assert_eq!(game.now([0, 65, 10]), "minecraft:air", "a explosão destrói os blocos");
 }
 
 #[test]
@@ -3323,7 +3348,6 @@ fn shift_and_the_purple_gesture_play_the_200_percent() {
     }
     tick(&mut game, &mods);
     dispatch_key(&mut game, &mods, "key.keyboard.left.shift", true);
-    purple_gesture(&mut game, &mods, true);
     purple_gesture(&mut game, &mods, true);
     dispatch_key(&mut game, &mods, "key.keyboard.left.shift", false);
     the_mod.state.lock().unwrap().gojo.purple.cinema.as_mut().expect("a cena").born -= Duration::from_millis(500);
@@ -3553,6 +3577,14 @@ fn the_unlimited_void_freezes_everyone_but_projectiles_and_lets_them_go() {
     for _ in 0..5 {
         tick(&mut game, &mods);
     }
+    // Ainda presos por 2 s depois do fim.
+    assert_eq!(flag(&game, 7, "NoAI"), Some(1));
+    {
+        let mut s = the_mod.state.lock().unwrap();
+        let void = s.gojo.void.as_mut().unwrap();
+        void.ended = Some(std::time::Instant::now() - Duration::from_secs_f32(crate::void::HOLD_AFTER + 0.1));
+    }
+    tick(&mut game, &mods);
     assert_eq!(flag(&game, 7, "NoAI"), Some(0));
     assert_eq!(flag(&game, 31, "NoGravity"), Some(0));
     assert_eq!(game.now([0, 63, 0]), "minecraft:stone");
@@ -3620,4 +3652,67 @@ fn the_gojo_tree_locks_the_red_behind_the_reverse_and_the_purple_behind_both() {
     assert_eq!(s.rpg.progress.tree_points, before + 1);
     assert_eq!(s.rpg.progress.rank(Node::RedPower), 0);
     assert_eq!(s.rpg.progress.rank(Node::Reverse), 1);
+}
+
+#[test]
+fn both_buttons_right_after_a_punch_lands_are_a_black_flash() {
+    let (the_mod, mods, mut game) = paying_game(0);
+    game.entities[0] = mob(7, "minecraft:zombie", [0.5, 64.0, 2.5]);
+    game.entities.push(mob(8, "minecraft:skeleton", [2.5, 64.0, 3.5]));
+    game.known.insert(8, 8);
+    tick(&mut game, &mods);
+    tick(&mut game, &mods);
+    let damage = |game: &Game, id: &str| -> Vec<u32> {
+        game.commands
+            .iter()
+            .filter(|c| c.contains(id))
+            .filter_map(|c| c.split_whitespace().nth(2).and_then(|n| n.parse().ok()))
+            .collect()
+    };
+    // Os dois botões sem um soco antes: nada (o direito de mão vazia é do jogo).
+    assert!(!click(&mut game, &mods, 1, true));
+    click(&mut game, &mods, 1, false);
+    // O soco acerta e, logo depois, os dois botões juntos: o Black Flash.
+    assert!(punch(the_mod, &mut game, &mods, 0.5));
+    assert!(click(&mut game, &mods, 0, true), "começa outro soco");
+    assert!(click(&mut game, &mods, 1, true), "o par: Black Flash");
+    click(&mut game, &mods, 0, false);
+    click(&mut game, &mods, 1, false);
+    {
+        let s = the_mod.state.lock().unwrap();
+        assert_eq!(s.combat.flashes.len(), 1);
+        assert!(!s.combat.flashes[0].air, "no chão");
+        assert!(s.combat.charge.is_none(), "o soco que começou não sai");
+        assert_eq!(s.combat.flashes[0].ball().kind, crate::sphere::Kind::Flash);
+    }
+    tick(&mut game, &mods);
+    let zombie = damage(&game, "000000000007");
+    assert_eq!(zombie.len(), 2, "o soco e o Black Flash: {:?}", game.commands);
+    assert!(zombie[1] >= 9, "o dano vai a 2,5 vezes: {zombie:?}");
+    assert!(damage(&game, "000000000008").is_empty(), "no chão, os raios não espalham");
+    // Fora da janela minúscula, nada.
+    assert!(punch(the_mod, &mut game, &mods, 0.5));
+    {
+        let mut s = the_mod.state.lock().unwrap();
+        let landed = s.combat.landed.as_mut().unwrap();
+        landed.0 -= Duration::from_secs_f32(crate::combat::FLASH_WINDOW + 0.05);
+    }
+    click(&mut game, &mods, 0, true);
+    assert!(!click(&mut game, &mods, 1, true), "tarde demais");
+    click(&mut game, &mods, 1, false);
+    click(&mut game, &mods, 0, false);
+    assert_eq!(the_mod.state.lock().unwrap().combat.flashes.len(), 1);
+    // No ar (os olhos subindo entre um tick e outro): os raios espalham e pegam de raspão o
+    // esqueleto perto.
+    game.eye[1] += 0.4;
+    tick(&mut game, &mods);
+    game.commands.clear();
+    assert!(punch(the_mod, &mut game, &mods, 0.5));
+    click(&mut game, &mods, 1, true);
+    assert!(click(&mut game, &mods, 0, true), "na outra ordem também");
+    click(&mut game, &mods, 0, false);
+    click(&mut game, &mods, 1, false);
+    assert!(the_mod.state.lock().unwrap().combat.flashes.last().unwrap().air);
+    tick(&mut game, &mods);
+    assert_eq!(damage(&game, "000000000008"), vec![crate::combat::FLASH_GRAZE], "{:?}", game.commands);
 }

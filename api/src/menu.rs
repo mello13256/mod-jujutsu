@@ -295,41 +295,41 @@ pub(crate) fn gate_button(index: usize, scroll: f32) -> [f32; 4] {
 /// Quanto tempo o segundo clique tem para confirmar um pacto, em segundos.
 pub(crate) const VOW_CONFIRM: f32 = 3.0;
 /// O alto de cada pacto no painel.
-const VOW_ROW: f32 = 68.0;
+const VOW_ROW: f32 = 46.0;
 
-/// O botão de aceitar o pacto `index`.
-pub(crate) fn vow_button(index: usize) -> [f32; 4] {
-    [196.0, 44.0 + VOW_ROW * index as f32 + 40.0, 80.0, 18.0]
+/// O botão de aceitar do pacto na linha `slot` do painel (a ordem dos que o personagem vê).
+pub(crate) fn vow_button(slot: usize) -> [f32; 4] {
+    [196.0, 44.0 + VOW_ROW * slot as f32 + 22.0, 80.0, 16.0]
 }
 
-/// O painel dos pactos vinculativos: cada um com a restrição, o que paga e o botão de aceitar
-/// (dois cliques); os em vigor com o tempo que falta. Embaixo, o dano a mais que somam.
+/// O painel dos pactos vinculativos: os do personagem (cada um com a restrição, o que paga e o
+/// botão de aceitar, em dois cliques); os em vigor com o tempo que falta. Embaixo, o dano a
+/// mais que somam.
 fn pacts(sheet: &Sheet, cursor: Option<[f32; 2]>) -> Canvas {
     const VIOLET: u32 = 0xB0_7C_FF;
     let mut c = Canvas::new(290.0, 372.0, cursor);
     let vows = &sheet.progress.vows;
     c.backdrop(VIOLET);
     c.title("PACTOS", VIOLET);
-    for (index, vow) in VOWS.iter().enumerate() {
-        let row = 44.0 + VOW_ROW * index as f32;
+    for (slot, index) in crate::vows::Vows::shown(sheet.progress.character).into_iter().enumerate() {
+        let vow = &VOWS[index];
+        let row = 40.0 + VOW_ROW * slot as f32;
         let left = vows.left[index];
         let active = left > 0.0;
-        c.fill([10.0, row, 268.0, VOW_ROW - 6.0], 4.0, rgba(if active { 0x2A_14_44 } else { 0x16_0C_26 }, 0.55), 0.0);
+        c.fill([10.0, row, 268.0, VOW_ROW - 5.0], 4.0, rgba(if active { 0x2A_14_44 } else { 0x16_0C_26 }, 0.55), 0.0);
         if active {
-            c.frame([10.0, row, 268.0, VOW_ROW - 6.0], 4.0, 1.0, rgba(VIOLET, 0.7), 0.6);
+            c.frame([10.0, row, 268.0, VOW_ROW - 5.0], 4.0, 1.0, rgba(VIOLET, 0.7), 0.6);
         }
-        c.text([18.0, row + 16.0], 10.5, rgba(TEXT, 1.0), vow.name, 0.0);
-        c.text([18.0, row + 30.0], 8.0, rgba(SOFT, 1.0), &fit(&format!("Restrição: {}", vow.rule), 8.0, 254.0), 0.0);
-        c.text([18.0, row + 52.0], 9.0, rgba(GOLD, 1.0), &format!("+{:.0}% de dano", vow.bonus * 100.0), 0.0);
+        c.text([18.0, row + 14.0], 10.0, rgba(TEXT, 1.0), vow.name, 0.0);
+        c.right(272.0, row + 14.0, 9.0, rgba(GOLD, 1.0), &format!("+{:.0}% de dano", vow.bonus * 100.0), 0.0);
+        c.text([18.0, row + 27.0], 7.5, rgba(SOFT, 1.0), &fit(vow.rule, 7.5, 170.0), 0.0);
         if active {
-            c.right(272.0, row + 53.0, 9.5, rgba(VIOLET, 1.0), &format!("EM VIGOR  {}", crate::vows::clock(left)), 0.8);
-        } else if !crate::vows::Vows::fits(index, sheet.progress.character) {
-            c.right(272.0, row + 53.0, 8.0, rgba(SOFT, 0.9), "só para o Sukuna", 0.0);
+            c.right(272.0, row + 35.0, 9.0, rgba(VIOLET, 1.0), &format!("EM VIGOR  {}", crate::vows::clock(left)), 0.8);
         } else if sheet.domain_open && vow.forbids == crate::vows::Forbid::Ability(crate::progress::Ability::Domain) {
-            c.right(272.0, row + 53.0, 8.0, rgba(BAD, 0.9), "feche o domínio antes", 0.0);
+            c.right(272.0, row + 35.0, 8.0, rgba(BAD, 0.9), "feche o domínio antes", 0.0);
         } else {
             let label = if sheet.vow_confirm == Some(index) { "CONFIRMAR?" } else { "ACEITAR" };
-            c.button(vow_button(index), label, VIOLET, Some(Action::Vow(index)));
+            c.button(vow_button(slot), label, VIOLET, Some(Action::Vow(index)));
         }
     }
     let bonus = vows.bonus();
@@ -680,7 +680,7 @@ fn choose(sheet: &Sheet, cursor: Option<[f32; 2]>) -> Canvas {
         c.centred(x, rect[1] + rect[3] - 22.0, 9.5, rgba(if marked { GOLD } else { color }, 1.0), label, if marked { 0.9 } else { 0.4 });
         c.buttons.push((rect, Action::Choose(index)));
     }
-    c.centred(260.0, 392.0, 8.0, rgba(SOFT, 0.9), "Mire num cartão e clique · trocar depois só com /sukuna personagem", 0.0);
+    c.centred(260.0, 392.0, 8.0, rgba(SOFT, 0.9), "Mire num cartão e clique · trocar depois só com /jujutsu personagem", 0.0);
     c
 }
 
@@ -772,7 +772,7 @@ fn tech_use(tech: Tech, costs: [f32; 5]) -> String {
     match tech {
         Tech::Blue => format!("tecla R (Shift: V1)  ·  {:.0} de energia", costs[0]),
         Tech::Red => format!("tecla V (cheio + botão direito: V1)  ·  {:.0} de energia", costs[1]),
-        Tech::Purple => format!("R + V duas vezes (Shift: 200%)  ·  {:.0}+ de energia", costs[2]),
+        Tech::Purple => format!("R + V juntas (Shift: 200%)  ·  {:.0}+ de energia", costs[2]),
         Tech::Mugen => format!("tecla G liga e desliga  ·  {:.0} de energia/s", costs[3]),
         Tech::Void => format!("segure B 1,5 s  ·  {:.0} de energia e manter", costs[4]),
     }
@@ -1155,6 +1155,8 @@ impl Mod {
                     s.vow_confirm = None;
                     if s.rpg.progress.vows.accept(index) {
                         s.rpg.mark_save();
+                        // O pacto da vida muda a vida máxima agora.
+                        s.rpg.attributes_due = true;
                         sealed = Some(VOWS[index]);
                     }
                 } else {
@@ -1232,7 +1234,7 @@ pub(crate) mod tests {
             progress,
             run: None,
             states: (0..GATES.len()).map(|_| Ok(())).collect(),
-            labels: vec!["Cortar o terreno: SIM".into(), "Efeitos da explosão: COMPLETOS".into()],
+            labels: vec!["Destruição de blocos: SIM".into(), "Efeitos da explosão: COMPLETOS".into()],
             gates_scroll: 0.0,
             shop_scroll: 0.0,
             vow_confirm: None,

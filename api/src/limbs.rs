@@ -95,7 +95,8 @@ impl State {
     /// O que as técnicas estão fazendo agora.
     pub(crate) fn doing(&self) -> Doing {
         Doing {
-            dismantle: self.mode,
+            // A pose do Desmantelar serve também para os lançamentos do Gojo.
+            dismantle: self.mode || self.gojo_launching(),
             cleave: self.grab.is_some(),
             web: self.web.is_some(),
             fuga: self.charge.is_some(),
@@ -104,7 +105,37 @@ impl State {
             punch: self.combat.charge.is_some() || self.combat.stance().is_some(),
             guard: self.combat.guarding,
             slap: self.combat.slapping().is_some(),
+            palm: self.gojo_palm().is_some(),
+            lapse: self.gojo.blues.iter().any(|blue| blue.big.is_some_and(|big| big.released.is_none())),
+            hollow: self.gojo.purple.charge.is_some() || self.gojo.purple.cinema.is_some(),
         }
+    }
+
+    /// A esfera do Gojo que está na palma: o Azul formando na mão, ou o Vermelho carregando
+    /// (ou mirando). No mundo.
+    pub(crate) fn gojo_palm(&self) -> Option<V3> {
+        if let Some(charge) = &self.gojo.red.charge {
+            return Some(charge.hand);
+        }
+        self.gojo
+            .blues
+            .iter()
+            .find(|blue| blue.big.is_none() && matches!(blue.phase(blue.age()), crate::gojo::Phase::Form(_)))
+            .map(|blue| blue.center(blue.age()))
+    }
+
+    /// Algo do Gojo acabou de sair da mão: o Azul começou a voar, o Vermelho explodiu ou o V1
+    /// saiu, ou um Roxo foi lançado.
+    fn gojo_launching(&self) -> bool {
+        const AFTER: f32 = 0.35;
+        let blue = self.gojo.blues.iter().any(|blue| {
+            let age = blue.age();
+            blue.big.is_none() && (crate::gojo::FORM..crate::gojo::FORM + AFTER).contains(&age)
+        });
+        let red = self.gojo.red.bursts.iter().any(|b| !b.purple && b.born.elapsed().as_secs_f32() < AFTER)
+            || self.gojo.red.shots.iter().any(|shot| shot.born.elapsed().as_secs_f32() < AFTER);
+        let purple = self.gojo.purple.hollows.iter().any(|h| !h.finale && h.born.elapsed().as_secs_f32() < AFTER);
+        blue || red || purple
     }
 
     /// Para onde a mão estendida vai, no mundo: o fim do traço que se desenha, ou o mob
@@ -165,6 +196,12 @@ impl State {
             time,
             fist: self.fist(),
             slap: self.combat.slapping().map(f64::from),
+            purple: self
+                .gojo
+                .purple
+                .charge
+                .as_ref()
+                .map_or(if self.gojo.purple.cinema.is_some() { 9.0 } else { 0.0 }, |charge| f64::from(charge.seconds())),
             ..Default::default()
         }
     }
@@ -289,6 +326,7 @@ impl Mod {
             .reach_point()
             .zip(feet)
             .map(|(point, feet)| anim::to_model(point, feet, body_yaw));
+        at.orb = s.gojo_palm().zip(feet).map(|(point, feet)| anim::to_model(point, feet, body_yaw));
         let pose = s.anim.pose(&at);
         if let Some(feet) = feet {
             let hands = anim::hands_in_world(&pose, slim, feet, body_yaw);
@@ -331,6 +369,9 @@ impl Mod {
         at.reach = s.reach_point().map(|point| {
             anim::camera_to_first_person(anim::world_to_camera(point, picture.position, axes))
         });
+        at.orb = s
+            .gojo_palm()
+            .map(|point| anim::camera_to_first_person(anim::world_to_camera(point, picture.position, axes)));
         let pose = s.anim.pose(&at);
         // As mãos no mundo, para a flecha e o arco.
         let tips = rig::tips(&pose, slim);

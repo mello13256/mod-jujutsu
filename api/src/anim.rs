@@ -17,6 +17,13 @@
 //!   carregado até o fim avança o corpo.
 //! - Defesa: os dois antebraços na frente do rosto.
 //! - Tapa no projétil: as costas da mão direita varrendo da direita para a esquerda.
+//! - Azul e Vermelho do Gojo: a mão direita na frente do rosto, a palma para cima, e a esfera
+//!   flutuando logo acima dela; ao lançar (ou soltar o Vermelho), a mão vai daí até a pose do
+//!   Desmantelar, o braço esticado para a frente.
+//! - Azul V1: a pose clássica, a mão direita erguida ao lado do rosto, o cotovelo para baixo.
+//! - Roxo: os braços abertos para os lados (o Azul de um lado, o Vermelho do outro), que se
+//!   fecham na frente quando as esferas se juntam; carregando, as duas mãos na frente, embaixo
+//!   da esfera; e o lançamento, como o do Azul.
 //!
 //! Em terceira pessoa o corpo inteiro é desenhado com a pele do jogador (`rig.rs`); em
 //! primeira pessoa, só os braços, no mesmo lugar em que o corpo os teria, e a câmera desce
@@ -40,9 +47,12 @@ pub enum Act {
     Punch,
     Guard,
     Slap,
+    Palm,
+    Lapse,
+    Hollow,
 }
 
-pub const ACTS: [Act; 10] = [
+pub const ACTS: [Act; 13] = [
     Act::Dismantle,
     Act::Cleave,
     Act::Web,
@@ -53,6 +63,9 @@ pub const ACTS: [Act; 10] = [
     Act::Punch,
     Act::Guard,
     Act::Slap,
+    Act::Palm,
+    Act::Lapse,
+    Act::Hollow,
 ];
 
 /// Os tempos do soco solto: o braço estica, fica, e volta à guarda; e o do tapa.
@@ -78,7 +91,7 @@ const EYE: f64 = 3.65;
 /// Os golpes que acabaram de sair, e quanto cada animação aparece agora (0 a 1).
 #[derive(Default)]
 pub struct Anim {
-    pub weights: [f64; 10],
+    pub weights: [f64; 13],
     pub fired: Option<Instant>,
     pub slammed: Option<Instant>,
     pub loosed: Option<Instant>,
@@ -98,6 +111,10 @@ pub struct Doing {
     pub punch: bool,
     pub guard: bool,
     pub slap: bool,
+    /// Do Gojo: a palma com a esfera em cima, o Azul V1 segurado, e o Roxo.
+    pub palm: bool,
+    pub lapse: bool,
+    pub hollow: bool,
 }
 
 /// O soco deste quadro: o braço que bate, o golpe (0 direto, 1 gancho, 2 uppercut), a carga
@@ -154,6 +171,10 @@ pub struct Moment {
     /// O soco e o tapa no projétil (há quanto tempo).
     pub fist: Option<Fist>,
     pub slap: Option<f64>,
+    /// A esfera do Gojo na mão (no mesmo referencial de `reach`), e há quanto tempo o Roxo
+    /// carrega.
+    pub orb: Option<V3>,
+    pub purple: f64,
 }
 
 fn since(at: Option<Instant>, limit: f32) -> Option<f32> {
@@ -177,6 +198,9 @@ impl Anim {
             doing.punch,
             doing.guard,
             doing.slap,
+            doing.palm,
+            doing.lapse,
+            doing.hollow,
         ];
         for (weight, on) in self.weights.iter_mut().zip(on) {
             // Entra em 0,12 s e sai em 0,22 s.
@@ -217,6 +241,9 @@ impl Anim {
                 Act::Punch => punch(at),
                 Act::Guard => guard(at),
                 Act::Slap => slap(at),
+                Act::Palm => palm(at),
+                Act::Lapse => lapse(at),
+                Act::Hollow => hollow(at),
                 }
             };
             pose = pose.mix(&target, weight);
@@ -336,6 +363,28 @@ impl Anim {
                 let k = at.slap.map_or(1.0, |t| ease(t / SWIPE));
                 put(RIGHT_ARM, crate::math::lerp([0.42, -0.15, -0.62], [-0.2, -0.12, -0.75], k), body(4.0, 2.0, -2.0));
                 put(LEFT_ARM, [-0.24, -0.30, -0.66], body(-3.0, -4.0, 1.0));
+            }
+            Act::Palm => {
+                // A mão logo abaixo da esfera, na frente do rosto; o cotovelo para baixo, o
+                // antebraço quase em pé, a palma para cima.
+                let orb = at.orb.map_or([0.14, -0.06, -0.6], first_person_to_camera);
+                put(RIGHT_ARM, add(orb, [0.0, -0.17, 0.04]), body(3.0, -7.0, -1.0));
+            }
+            Act::Lapse => {
+                // A mão erguida ao lado do rosto, os dedos para cima, o cotovelo embaixo.
+                let shake = [(at.time * 31.0).sin() * 0.004, (at.time * 23.0).cos() * 0.004, 0.0];
+                put(RIGHT_ARM, add([0.3, -0.04, -0.56], shake), body(5.0, -7.0, -1.0));
+            }
+            Act::Hollow => {
+                // Abertos para os lados (as esferas nas mãos), fechando na frente quando elas
+                // se juntam; carregando, as duas embaixo da esfera.
+                let close = ease(at.purple / f64::from(crate::purple::CONVERGE));
+                let shake = [(at.time * 37.0).sin() * 0.005, (at.time * 29.0).cos() * 0.005, 0.0];
+                for (limb, side) in [(RIGHT_ARM, 1.0), (LEFT_ARM, -1.0)] {
+                    let open = [0.52 * side, -0.22, -0.62];
+                    let shut = [0.09 * side, -0.36, -0.8];
+                    put(limb, add(crate::math::lerp(open, shut, close), shake), body(5.0 * side, -6.0, -1.0));
+                }
             }
             Act::Release => {
                 let t = since(self.expanded, RELEASE).unwrap_or(RELEASE);
@@ -732,6 +781,56 @@ fn release(at: &Moment, t: f32) -> Pose {
     pose
 }
 
+/// A palma do Gojo: a mão direita na frente do rosto, embaixo da esfera, o cotovelo para baixo.
+fn palm(at: &Moment) -> Pose {
+    let mut pose = base(at);
+    pose.twist = -0.15;
+    let joints = rig::frame(at.slim, pose.drop, pose.lean);
+    let shoulder = rig::rotate([0.0, pose.twist, 0.0], joints.roots[RIGHT_ARM]);
+    let hand = match at.orb {
+        // Logo abaixo da esfera (três texels).
+        Some(orb) => add(orb, body(0.0, -3.0, 0.0)),
+        None => add(joints.neck, body(1.5, 0.5, 6.0)),
+    };
+    pose.limbs[RIGHT_ARM] = Limb {
+        target: turned(pose.twist, hand),
+        pole: turned(pose.twist, add(shoulder, body(3.0, -7.0, -1.0))),
+    };
+    pose
+}
+
+/// O Azul V1: a mão direita erguida ao lado do rosto, o cotovelo para baixo e para fora.
+fn lapse(at: &Moment) -> Pose {
+    let mut pose = base(at);
+    pose.twist = -0.1;
+    let joints = rig::frame(at.slim, pose.drop, pose.lean);
+    let shoulder = rig::rotate([0.0, pose.twist, 0.0], joints.roots[RIGHT_ARM]);
+    pose.limbs[RIGHT_ARM] = Limb {
+        target: turned(pose.twist, add(shoulder, body(-1.0, 7.5, 3.0))),
+        pole: turned(pose.twist, add(shoulder, body(6.0, -3.0, -1.0))),
+    };
+    pose
+}
+
+/// O Roxo: os braços abertos para os lados, que se fecham na frente do peito quando o Azul e o
+/// Vermelho se juntam; carregando, as duas mãos ali, embaixo da esfera.
+fn hollow(at: &Moment) -> Pose {
+    let mut pose = base(at);
+    let close = ease(at.purple / f64::from(crate::purple::CONVERGE));
+    pose.lean = 0.06 * close;
+    let joints = rig::frame(at.slim, pose.drop, pose.lean);
+    for (limb, side) in [(RIGHT_ARM, 1.0), (LEFT_ARM, -1.0)] {
+        let shoulder = joints.roots[limb];
+        let open = add(shoulder, body(7.5 * side, 0.5, 3.5));
+        let shut = add(joints.neck, body(1.6 * side, -5.0, 8.0));
+        pose.limbs[limb] = Limb {
+            target: crate::math::lerp(open, shut, close),
+            pole: add(shoulder, body(5.0 * side, -6.0, -1.0)),
+        };
+    }
+    pose
+}
+
 /// Onde ficam as mãos no mundo: a palma direita e a esquerda, para a flecha e o arco.
 pub fn hands_in_world(pose: &Pose, slim: bool, feet: V3, body_yaw: f32) -> [V3; 2] {
     let tips = rig::tips(pose, slim);
@@ -931,6 +1030,35 @@ pub(crate) mod tests {
         }
         // As mãos afastadas, como os braços de um Y.
         assert!(len(sub(tips[RIGHT_ARM], tips[LEFT_ARM])) > 18.0);
+    }
+
+    #[test]
+    fn the_gojo_palm_holds_the_orb_above_it_and_the_purple_closes_the_arms() {
+        // Pelos olhos: a mão direita logo abaixo da esfera, na frente do rosto.
+        let orb_camera = [0.14, -0.07, -0.62];
+        let mut anim = Anim::default();
+        anim.weights[ACTS.iter().position(|a| *a == Act::Palm).unwrap()] = 1.0;
+        let at = Moment { first_person: true, orb: Some(camera_to_first_person(orb_camera)), ..moment() };
+        let pose = anim.pose(&at);
+        let tip = first_person_to_camera(rig::rotate([0.0, pose.twist, 0.0], rig::tips(&pose, false)[RIGHT_ARM]));
+        assert!(len(sub(tip, add(orb_camera, [0.0, -0.17, 0.04]))) < 0.12, "a mão embaixo da esfera: {tip:?}");
+        assert!(tip[1] < orb_camera[1], "abaixo dela");
+        // De fora: a mão direita na frente do rosto, abaixo da esfera.
+        let mut anim = Anim::default();
+        anim.weights[ACTS.iter().position(|a| *a == Act::Palm).unwrap()] = 1.0;
+        let orb = to_model(crate::gojo::hand([0.0, 1.62, 0.0], [0.0, 0.0, -1.0]), [0.0; 3], 0.0);
+        let pose = anim.pose(&Moment { orb: Some(orb), ..moment() });
+        let hands = hands_in_world(&pose, false, [0.0; 3], 0.0);
+        let world_orb = crate::gojo::hand([0.0, 1.62, 0.0], [0.0, 0.0, -1.0]);
+        assert!(hands[0][1] < world_orb[1] && len(sub(hands[0], world_orb)) < 0.45, "{:?} {world_orb:?}", hands[0]);
+        // O Roxo: abertos no começo, fechados na frente depois que as esferas se juntam.
+        let mut anim = Anim::default();
+        anim.weights[ACTS.iter().position(|a| *a == Act::Hollow).unwrap()] = 1.0;
+        let gap = |purple: f64| {
+            let hands = hands_in_world(&anim.pose(&Moment { purple, ..moment() }), false, [0.0; 3], 0.0);
+            len(sub(hands[0], hands[1]))
+        };
+        assert!(gap(0.0) > 1.2 && gap(1.0) < 0.5, "{} {}", gap(0.0), gap(1.0));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-//! Sukuna, etapa 1: Desmantelar.
+//! Jujutsu Horizon (o antigo mod do Sukuna): o Sukuna e o Gojo no Horizon.
 //!
 //! Segure a tecla do mod (R por padrão, trocável em Opções > Mods) para entrar no modo de
 //! desenho. Com ela segurada, segure o botão esquerdo do mouse e mova a mira: cada arrasto
@@ -63,8 +63,11 @@ use horizon_client::mod_api::{
 use math::{V3, add, len, lerp, mul, norm, sub};
 
 /// O id do mod: a pasta das configurações e a linha da tecla.
+/// O id do mod: fica "sukuna" para os mundos, as teclas e as opções de antes continuarem
+/// valendo. O nome que aparece é [`NAME`].
 pub const ID: &str = "sukuna";
-pub const VERSION: &str = "0.29.0";
+pub const NAME: &str = "Jujutsu Horizon";
+pub const VERSION: &str = "0.30.0";
 const KEY: &str = "draw";
 const DEFAULT_KEY: &str = "key.keyboard.r";
 
@@ -170,7 +173,7 @@ impl Settings {
     pub(crate) fn labels(&self) -> Vec<String> {
         vec![
             format!(
-                "Cortar o terreno: {}",
+                "Destruição de blocos: {}",
                 if self.terrain { "SIM" } else { "NÃO" }
             ),
             format!("Efeitos da explosão: {}", self.effects.label()),
@@ -1083,25 +1086,24 @@ impl Hooks for Mod {
     fn mods(&self, _host: &mut dyn Host, event: &mut ModsEvent<'_>) {
         event.mods.push(NativeMod {
             id: ID.into(),
-            title: format!("Sukuna {VERSION}"),
-            description: "Desmantelar: segure a tecla, arraste com o botão esquerdo para \
-                          desenhar traços no ar e solte: cada traço vira um corte. Cleave: \
-                          segure a outra tecla mirando num mob para agarrá-lo e retalhá-lo. \
-                          Flecha de fogo: segure a terceira tecla para carregar e solte. \
-                          Expansão de domínio: segure a quarta por 3 ou 5 segundos. \
-                          Num mundo novo, N escolhe o personagem (Sukuna ou Gojo); com o \
-                          Gojo, a primeira tecla é o Azul (com Shift, o Azul V1) e a terceira o Vermelho; as duas juntas, duas vezes, o Roxo; a segunda liga o Mugen."
+            title: format!("{NAME} {VERSION}"),
+            description: "Jujutsu Kaisen no Horizon. Num mundo novo, N escolhe o feiticeiro: \
+                          Sukuna (Desmantelar, Cleave, Flecha de fogo, Santuário Malevolente) ou \
+                          Gojo (Azul, Vermelho, Roxo, Mugen, Vazio Ilimitado). Os dois têm \
+                          energia amaldiçoada, técnica reversa, combate de mão vazia com Black \
+                          Flash, status, árvore de habilidades, Portões, loja e pactos. Mesmas \
+                          teclas para os dois; /jujutsu para os comandos."
                 .into(),
             keys: vec![
-                [KEY.into(), "Desmantelar: desenhar cortes".into(), DEFAULT_KEY.into()],
+                [KEY.into(), "Desmantelar (Sukuna) · Azul (Gojo)".into(), DEFAULT_KEY.into()],
                 [
                     cleave::KEY.into(),
-                    "Cleave: agarrar e retalhar".into(),
+                    "Cleave (Sukuna) · Mugen (Gojo)".into(),
                     cleave::DEFAULT_KEY.into(),
                 ],
                 [
                     fuga::KEY.into(),
-                    "Flecha de fogo: carregar e disparar".into(),
+                    "Flecha de fogo (Sukuna) · Vermelho (Gojo)".into(),
                     fuga::DEFAULT_KEY.into(),
                 ],
                 [
@@ -1116,7 +1118,7 @@ impl Hooks for Mod {
                 ],
                 [
                     domain::KEY.into(),
-                    "Expansão de domínio: segurar 3 s (fechada) ou 5 s (aberta)".into(),
+                    "Expansão de domínio: Santuário (Sukuna) · Vazio Ilimitado (Gojo)".into(),
                     domain::DEFAULT_KEY.into(),
                 ],
                 [
@@ -1305,6 +1307,10 @@ impl Hooks for Mod {
             return Flow::Cancel;
         }
         let ours = host.window() && host.on(ID);
+        // Os dois botões juntos logo depois de um soco acertar: o Black Flash.
+        if event.pressed && ours && self.black_flash_press(host, event.button as usize) {
+            return Flow::Cancel;
+        }
         // O botão direito, carregando o Vermelho: mira e lança o V1.
         if event.button == 1 && ours && self.red_right(host, event.pressed) {
             return Flow::Cancel;
@@ -1479,7 +1485,8 @@ impl Hooks for Mod {
     /// <sukuna|gojo>`: troca o personagem do mundo.
     fn command(&self, host: &mut dyn Host, event: &mut CommandEvent<'_>) -> Flow {
         let words: Vec<&str> = event.command.split_whitespace().collect();
-        if words.first() != Some(&"sukuna") {
+        // `/jujutsu`, e `/sukuna` como antes.
+        if !matches!(words.first(), Some(&"jujutsu") | Some(&"sukuna")) {
             return Flow::Continue;
         }
         let text = match words.get(1).copied() {
@@ -1487,7 +1494,7 @@ impl Hooks for Mod {
                 let mut s = self.state.lock().unwrap();
                 s.rpg.max_out();
                 s.power.level = 1.0;
-                "Sukuna: tudo no máximo (nível 500, status 500, maestria 100, árvore completa)".to_owned()
+                format!("{NAME}: tudo no máximo (nível 500, status 500, maestria 100, árvore completa)")
             }
             // A troca de personagem, que o menu não faz: o que estava em uso para, e o resto
             // do progresso fica.
@@ -1514,12 +1521,12 @@ impl Hooks for Mod {
                         }
                     }
                     _ => format!(
-                        "Personagem agora: {}. Use /sukuna personagem sukuna ou /sukuna personagem gojo",
+                        "Personagem agora: {}. Use /jujutsu personagem sukuna ou /jujutsu personagem gojo",
                         s.rpg.progress.character.map_or("nenhum", |c| c.name())
                     ),
                 }
             }
-            _ => "Use /sukuna max (tudo no máximo) ou /sukuna personagem <sukuna|gojo>".to_owned(),
+            _ => "Use /jujutsu max (tudo no máximo) ou /jujutsu personagem <sukuna|gojo>".to_owned(),
         };
         host.client_action_bar(Text::literal(text), false);
         Flow::Cancel
@@ -1532,6 +1539,7 @@ impl Hooks for Mod {
     }
 
     fn commands(&self, _host: &mut dyn Host, event: &mut CommandsEvent<'_>) {
+        event.commands.push("jujutsu");
         event.commands.push("sukuna");
     }
 

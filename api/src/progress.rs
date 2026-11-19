@@ -678,7 +678,9 @@ impl Progress {
 
     /// A vida máxima: 20, mais um coração a cada 5 pontos.
     pub fn max_health(&self) -> f64 {
-        20.0 + 2.0 * f64::from((self.stat(Stat::Health) - 1) / 5)
+        let full = 20.0 + 2.0 * f64::from((self.stat(Stat::Health) - 1) / 5);
+        // O pacto "Corpo como preço": metade (em corações inteiros).
+        if self.vows.halves_life() { (full / 4.0).round().max(1.0) * 2.0 } else { full }
     }
 
     /// Os comandos que põem os atributos do jogador no que os status valem.

@@ -433,7 +433,12 @@ impl Mod {
             rpg.tick();
             // O tempo dos pactos corre com o jogo; gravado a cada cinco segundos.
             if rpg.progress.vows.left.iter().any(|left| *left > 0.0) {
+                let halved = rpg.progress.vows.halves_life();
                 rpg.progress.vows.pass(0.05);
+                // O pacto da vida acabou: a vida máxima volta.
+                if halved != rpg.progress.vows.halves_life() {
+                    rpg.attributes_due = true;
+                }
                 rpg.vow_ticks += 1;
                 if rpg.vow_ticks.is_multiple_of(100) || rpg.progress.vows.left.iter().all(|left| *left <= 0.0) {
                     rpg.save_due = true;
@@ -654,12 +659,15 @@ impl Mod {
     /// No HUD: a energia amaldiçoada à esquerda, com as recargas e o nível embaixo dela, e a
     /// barra do pulo enquanto ele carrega.
     pub(crate) fn draw_rpg(&self, host: &mut dyn Host, event: &mut HudEvent<'_>) {
-        let (energy, max, cooldowns, level, part, points, jump) = {
+        let (energy, max, cooldowns, level, part, points, jump, gojo) = {
             let s = self.state.lock().unwrap();
             if !s.enabled {
                 return;
             }
             let rpg = &s.rpg;
+            // As do Gojo, no lugar das do Sukuna (no modo livre, nenhuma vale).
+            let gojo = (rpg.progress.character == Some(progress::Character::Gojo))
+                .then(|| if rpg.free { Vec::new() } else { s.gojo.waits() });
             (
                 rpg.energy,
                 rpg.progress.max_energy(),
@@ -668,6 +676,7 @@ impl Mod {
                 rpg.progress.xp as f32 / progress::xp_needed(rpg.progress.level) as f32,
                 rpg.progress.points,
                 (rpg.jump_charge > 0.0).then_some(rpg.jump_charge),
+                gojo,
             )
         };
         let Some(gui) = host.client_state().map(|client| client.gui_size) else {
@@ -694,9 +703,15 @@ impl Mod {
         y += 6.0;
         // As recargas que ainda correm.
         let names = ["Desmantelar", "Cleave", "Flecha", "Domínio", "Reversa", "Corte do mundo"];
-        for (name, wait) in names.iter().zip(cooldowns) {
-            if wait > 0 {
-                let text = format!("{name} {:.0}s", (wait as f32 / 20.0).ceil());
+        let mut waits: Vec<(&str, f32)> = names.iter().zip(cooldowns).map(|(name, wait)| (*name, wait as f32 / 20.0)).collect();
+        if let Some(gojo) = gojo {
+            // Do Gojo: as dele, e a técnica reversa, que é dos dois.
+            waits = gojo;
+            waits.push(("Reversa", cooldowns[progress::REVERSE_SLOT] as f32 / 20.0));
+        }
+        for (name, wait) in waits {
+            if wait > 0.0 {
+                let text = format!("{name} {:.0}s", wait.ceil());
                 host.text(event.batch, &text, [MARGIN, y], 0xC0_C0_C0, true);
                 y += 10.0;
             }

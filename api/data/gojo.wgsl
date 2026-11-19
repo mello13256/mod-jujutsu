@@ -339,6 +339,82 @@ fn red_rays(s: Sphere, rd: vec3<f32>, d: f32, angle: f32, time: f32) -> vec3<f32
     return light;
 }
 
+// A distância (em blocos) entre o raio que sai do olho (a origem) na direção `rd` e o segmento de `a` a `b`.
+fn ray_segment(rd: vec3<f32>, a: vec3<f32>, b: vec3<f32>) -> f32 {
+    let u = b - a;
+    let uu = dot(u, u);
+    let ru = dot(rd, u);
+    let den = uu - ru * ru;
+    var k = 0.0;
+    if (den > 1.0e-6) {
+        k = clamp((dot(rd, a) * ru - dot(u, a)) / den, 0.0, 1.0);
+    }
+    let p = a + u * k;
+    return length(p - rd * max(dot(p, rd), 0.0));
+}
+
+// Raios (relâmpagos) saindo de uma esfera em `c` de raio `radius`: `count` deles, cada um com seis trechos tortos
+// até `reach` blocos da borda, sorteados de novo nove vezes por segundo (o pisca). Devolve o fio do meio (x) e o
+// brilho em volta (y), que vai até `spread` larguras do fio (`thin` afina o fio).
+fn bolts(c: vec3<f32>, radius: f32, rd: vec3<f32>, time: f32, seed: f32, count: i32, reach: f32, spread: f32, thin: f32) -> vec2<f32> {
+    let tc = dot(c, rd);
+    let b = length(c - rd * tc);
+    var out = vec2<f32>(0.0);
+    if (tc < 0.0 || b > radius + reach * 1.15) {
+        return out;
+    }
+    let flick = floor(time * 9.0);
+    let width = (0.045 + tc * 0.0022) * thin;
+    let step_len = reach / 6.0;
+    for (var k = 0; k < count; k = k + 1) {
+        let key = vec3<f32>(f32(k) * 3.1, seed * 37.0, flick);
+        if (fh31(key) < 0.3) {
+            continue;
+        }
+        var dir = normalize(vec3<f32>(fh31(key + 1.7), fh31(key + 5.3), fh31(key + 9.1)) - 0.5 + vec3<f32>(1.0e-3));
+        var p = c + dir * radius;
+        for (var j = 0; j < 6; j = j + 1) {
+            let r = key + vec3<f32>(f32(j) * 11.0 + 2.0);
+            let jitter = vec3<f32>(fh31(r), fh31(r + 3.3), fh31(r + 7.7)) - 0.5;
+            dir = normalize(dir + jitter * 1.3);
+            let q = p + dir * step_len * (0.6 + 0.8 * fh31(r + 13.0));
+            let d = ray_segment(rd, p, q);
+            let fade = 1.0 - f32(j) / 7.0;
+            out.x = out.x + exp(-(d * d) / (width * width)) * fade;
+            out.y = out.y + exp(-d / (width * spread)) * 0.22 * fade;
+            p = q;
+        }
+    }
+    return out;
+}
+
+// O Black Flash (tipo 8): no ponto do golpe, raios pretos com a borda vermelha e um clarão escuro, que somem em
+// meio segundo. `s.a.w` até onde os raios vão, `s.c.x` quanto aparece, `s.c.z` 1 no ar (mais raios, mais
+// espalhados). Devolve quanto escurece (w) e a luz vermelha (xyz).
+fn black_flash(s: Sphere, rd: vec3<f32>, scene_len: f32, time: f32) -> vec4<f32> {
+    let c = s.a.xyz;
+    let reach = s.a.w;
+    let fade = s.c.x;
+    let air = s.c.z > 0.5;
+    let tc = dot(c, rd);
+    if (fade <= 0.0 || tc <= 0.0 || scene_len < tc - reach) {
+        return vec4<f32>(0.0);
+    }
+    let count = select(7, 12, air);
+    let core = select(0.12, 0.06, air);
+    let b = bolts(c, core, rd, time + s.b.w * 10.0, s.b.w, count, reach, 2.6, 0.45);
+    // O clarão: um miolo escuro com um anel vermelho em volta, só no começo.
+    let gap = length(c - rd * tc);
+    let early = saturate(1.0 - s.b.z * 5.0);
+    let flash = exp(-pow(gap / (0.25 + reach * 0.15), 2.0)) * early;
+    let ring = exp(-pow((gap - reach * 0.35 * (0.4 + s.b.z * 3.0)) / 0.12, 2.0)) * early;
+    // O fio é preto; em volta dele, uma borda vermelha fina (o brilho menos o fio).
+    let dark = saturate(b.x * 1.6 + flash * 0.85) * fade;
+    let rim = max(b.y * 2.0 - b.x * 0.6, 0.0);
+    let red = vec3<f32>(1.8, 0.04, 0.07) * (rim * 0.9 + ring * 0.8) * fade;
+    return vec4<f32>(red, dark);
+}
+
 // A onda de choque do Vermelho: uma casca vermelha fina que cresce de `s.a.xyz` até `s.a.w` blocos. Ela brilha mais
 // onde é vista de lado (por fora, a borda; por dentro, para os lados), acende uma faixa onde corta o terreno, e
 // empurra a imagem por onde passa. Com um clarão no começo. Devolve o quanto a imagem anda (em uv) e a luz.
@@ -647,11 +723,12 @@ fn void_pixel(s: Sphere, rd: vec3<f32>, scene_len: f32, time: f32, count: u32) -
         if (t_in <= 0.0 || scene_len < t_in) {
             return out;
         }
+        // A barreira por fora é preta, como a de todo domínio fechado: só um fio escuro na borda
+        // mostra a forma.
         let n = normalize(rd * t_in - c);
-        let rim = pow(1.0 - abs(dot(n, rd)), 3.0);
-        let a = atan2(n.z, n.x);
+        let rim = pow(1.0 - abs(dot(n, rd)), 6.0);
         out.on = true;
-        out.color = void_env(rd, hole, time, seed) * 0.8 + rainbow(a / TAU + time * 0.2) * rim * 1.6 + vec3<f32>(0.6, 0.8, 1.0) * rim;
+        out.color = vec3<f32>(0.015, 0.012, 0.03) * rim;
         out.weight = shown;
         return out;
     }
@@ -661,13 +738,13 @@ fn void_pixel(s: Sphere, rd: vec3<f32>, scene_len: f32, time: f32, count: u32) -
     if (c.y < -0.05 && rd.y < -1.0e-4) {
         t_floor = c.y / rd.y;
     }
-    // Formado, o vazio não tem fim: além da parede também é ele. Formando (ou se desfazendo), além da parede ainda é o
-    // mundo, visto através de uma película colorida.
-    let wall = select(t_exit, 1.0e9, formed > 0.5);
-    let reach = min(wall, t_floor);
-    if (scene_len < reach - 0.05) {
+    // Só o que está dentro da esfera e acima da água aparece como é (as entidades: os blocos de dentro já sumiram).
+    // Formado, o vazio não tem fim: além da parede também é ele, e nada de fora aparece. Formando (ou se desfazendo),
+    // além da parede ainda é o mundo, visto através de uma película colorida.
+    if (scene_len < min(t_exit, t_floor) - 0.05) {
         return out;
     }
+    let wall = select(t_exit, 1.0e9, formed > 0.5);
     out.on = true;
     out.weight = shown;
     if (t_floor < wall) {
@@ -682,7 +759,7 @@ fn void_pixel(s: Sphere, rd: vec3<f32>, scene_len: f32, time: f32, count: u32) -
         let above = void_env(up, hole, time, seed);
         let sheen = vec3<f32>(0.45, 0.65, 1.0) * length(slope) * 0.6;
         out.color = mix(below, above, fresnel) + sheen;
-    } else if (formed > 0.5 || t_exit >= scene_len) {
+    } else if (formed > 0.5) {
         out.color = void_env(rd, hole, time, seed);
     } else {
         // A película da parede enquanto o domínio se forma: o mundo de fora, escurecido e com cores na borda.
@@ -731,6 +808,8 @@ fn fs_main(in: StageIn) -> @location(0) vec4<f32> {
     var nearest = 1.0e9;
     var front = vec4<f32>(0.0);
     var halo = vec3<f32>(0.0);
+    // Quanto o Black Flash escurece o que está atrás.
+    var dark = 0.0;
     // O Vazio Ilimitado primeiro: ele é o fundo, e as esferas vêm por cima.
     var room = VoidPixel(false, vec3<f32>(0.0), 0.0);
     for (var i = 0u; i < count; i = i + 1u) {
@@ -750,6 +829,15 @@ fn fs_main(in: StageIn) -> @location(0) vec4<f32> {
     for (var i = 0u; i < count; i = i + 1u) {
         let s = spheres[i];
         let radius = s.a.w;
+        if (s.b.x > 7.5 && s.b.x < 8.5) {
+            let f = black_flash(s, rd, scene_len, time);
+            if (f.w > 0.001 || any(f.xyz > vec3<f32>(0.001))) {
+                touched = true;
+                dark = max(dark, f.w);
+                halo = halo + f.xyz;
+            }
+            continue;
+        }
         if (radius <= 0.0 || s.b.x > 5.5) {
             continue;
         }
@@ -804,6 +892,12 @@ fn fs_main(in: StageIn) -> @location(0) vec4<f32> {
                 let d = length(off) / radius;
                 let angle = atan2(dot(off, basis[1]), dot(off, basis[0]));
                 halo = halo + red_rays(s, rd, d, angle, time) * fade;
+                // O Roxo instável, perto de explodir: relâmpagos roxos saindo dele (`rays` acima de 1).
+                if (s.b.x > 2.5 && s.c.w > 1.0) {
+                    let amount = min(s.c.w - 1.0, 1.0);
+                    let bolt = bolts(c, radius, rd, time, s.b.w, 9, radius * (1.2 + 1.3 * amount), 7.0, 1.0);
+                    halo = halo + (PURPLE_CORE * 1.1 * bolt.x + PURPLE_THREAD * 1.4 * bolt.y) * amount;
+                }
             }
         }
     }
@@ -823,6 +917,8 @@ fn fs_main(in: StageIn) -> @location(0) vec4<f32> {
     // A luz da esfera se achata aos poucos em vez de estourar; o mundo fica como está, para emendar na borda.
     let added = front.rgb + halo;
     col = col * (1.0 - front.a) + added / (vec3<f32>(1.0) + added * 0.3);
+    // Os raios pretos do Black Flash por cima de tudo.
+    col = col * (1.0 - dark);
     if (encoded()) {
         return vec4<f32>(linear_to_srgb(max(col, vec3<f32>(0.0))), 1.0);
     }

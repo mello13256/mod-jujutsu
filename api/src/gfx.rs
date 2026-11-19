@@ -1107,6 +1107,7 @@ impl RenderHooks for Mod {
                 || s.gojo.purple.active()
                 || s.gojo.mugen.on
                 || s.gojo.void.is_some()
+                || !s.combat.flashes.is_empty()
                 || s.gates.barrier.is_some())
         {
             event.needs.world_depth = true;
@@ -1202,6 +1203,13 @@ impl RenderHooks for Mod {
                 if let Some(void) = s.gojo.void.as_ref() {
                     balls.extend(void.balls(&s.dimension));
                 }
+                balls.extend(
+                    s.combat
+                        .flashes
+                        .iter()
+                        .filter(|flash| flash.born.elapsed().as_secs_f32() < crate::combat::FLASH_LIFE)
+                        .map(crate::combat::Flash::ball),
+                );
                 balls
             } else {
                 Vec::new()

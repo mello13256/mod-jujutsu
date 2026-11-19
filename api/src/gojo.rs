@@ -303,6 +303,23 @@ pub struct Gojo {
 }
 
 impl Gojo {
+    /// As recargas que ainda correm, com o nome de cada uma e os segundos que faltam.
+    pub fn waits(&self) -> Vec<(&'static str, f32)> {
+        let left = |at: Option<Instant>| at.map_or(0.0, |at| at.saturating_duration_since(Instant::now()).as_secs_f32());
+        [
+            ("Azul", self.ready_at),
+            ("Azul V1", self.big_ready_at),
+            ("Vermelho", self.red.ready_at),
+            ("Roxo", self.purple.ready_at),
+            ("Roxo 200%", self.purple.big_ready_at),
+            ("Vazio", self.void_ready_at),
+        ]
+        .into_iter()
+        .map(|(name, at)| (name, left(at)))
+        .filter(|(_, wait)| *wait > 0.0)
+        .collect()
+    }
+
     /// O Azul V1 que a tecla ainda segura.
     pub fn held(&mut self) -> Option<&mut Blue> {
         self.blues.iter_mut().find(|blue| blue.big.is_some_and(|big| big.released.is_none()))
@@ -314,7 +331,8 @@ pub fn hand(eye: V3, look: V3) -> V3 {
     let right = norm(cross(look, [0.0, 1.0, 0.0]));
     let right = if right.iter().all(|v| v.is_finite()) { right } else { [-1.0, 0.0, 0.0] };
     let up = cross(right, look);
-    add(add(add(eye, mul(look, 0.75)), mul(right, 0.35)), mul(up, -0.25))
+    // Na frente do rosto, um pouco à direita: acima da palma da animação.
+    add(add(add(eye, mul(look, 0.62)), mul(right, 0.14)), mul(up, -0.07))
 }
 
 /// Para onde o Azul voa: um bloco antes do que a mira encontra (`hit`, se encontra), ou o
@@ -610,6 +628,11 @@ impl Mod {
             else {
                 continue;
             };
+            // O V1 destrói o que já absorveu: um bloco que chega nele some (sem virar item).
+            if pull.big && kind.ends_with("falling_block") && len(sub(pull.center, body)) < f64::from(BIG_RADIUS) + 0.6 {
+                host.remove_entity(dimension, id);
+                continue;
+            }
             let Some(entity) = host.entity(id) else {
                 continue;
             };
@@ -665,7 +688,8 @@ impl Mod {
                     };
                     let from = [f64::from(cell[0]) + 0.5, f64::from(cell[1]), f64::from(cell[2]) + 0.5];
                     let velocity = add(mul(norm(sub(pull.center, from)), 0.6), [0.0, 0.25, 0.0]);
-                    let falling = horizon_client::mod_api::NativeFalling { drop_item: true, hurts: false };
+                    // Se cair antes de chegar, também não vira item: o Azul V1 destrói o que arranca.
+                    let falling = horizon_client::mod_api::NativeFalling { drop_item: false, hurts: false };
                     if host.spawn_falling_block(dimension, state, from, velocity, falling) {
                         thrown += 1;
                     }
@@ -768,6 +792,18 @@ pub fn rip_cells(center: V3, count: usize, mut block: impl FnMut([i32; 3]) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_hud_lists_the_gojo_waits_that_are_still_running() {
+        let mut gojo = Gojo::default();
+        assert!(gojo.waits().is_empty());
+        gojo.ready_at = Some(Instant::now() + std::time::Duration::from_secs(2));
+        gojo.void_ready_at = Some(Instant::now() + std::time::Duration::from_secs(30));
+        gojo.red.ready_at = Some(Instant::now() - std::time::Duration::from_secs(1));
+        let names: Vec<&str> = gojo.waits().iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, ["Azul", "Vazio"]);
+        assert!(gojo.waits()[1].1 > 29.0);
+    }
 
     fn blue(flight: Option<Flight>) -> Blue {
         Blue {

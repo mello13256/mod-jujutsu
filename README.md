@@ -1,6 +1,14 @@
-# Sukuna: Desmantelar, Cleave, flecha de fogo e barra de energia (e o Gojo)
+# Jujutsu Horizon
 
-Mod nativo para o Horizon (Minecraft: Java Edition 26.3 em Rust). Só singleplayer por enquanto.
+Feitiçaria de Jujutsu Kaisen no Horizon (Minecraft: Java Edition 26.3 em Rust): o **Sukuna**
+(Desmantelar, Cleave, Flecha de fogo, Santuário Malevolente) e o **Gojo** (Azul, Vermelho, Roxo,
+Mugen, Vazio Ilimitado), com sistema de nível, Portões, pactos, combate de mão vazia e Black
+Flash. Mod nativo, só singleplayer por enquanto. O que mudou em cada versão está no
+`CHANGELOG.md`.
+
+Até a 0.29 o mod se chamava "Sukuna". O id continua `sukuna` (a pasta `sukuna/` dentro do mundo
+também), para os mundos e saves antigos continuarem valendo. O comando agora é **/jujutsu**; o
+**/sukuna** continua funcionando.
 
 ## Escolha do personagem (primeira vez que aperta N num mundo)
 
@@ -15,7 +23,7 @@ personagem". Soco, defesa, pulo carregado, barra de energia (M) e técnica rever
 para os dois. Mundos de versões antigas também perguntam na primeira vez (escolha o Sukuna
 para continuar como antes; nível, status e o resto ficam).
 
-Para trocar depois: **/sukuna personagem gojo** ou **/sukuna personagem sukuna**. Sem o
+Para trocar depois: **/jujutsu personagem gojo** ou **/jujutsu personagem sukuna**. Sem o
 nome, o comando diz qual é o personagem agora. A troca para o que estava em uso e mantém o
 resto do progresso (os pontos gastos nos nós da árvore do outro personagem voltam).
 
@@ -24,8 +32,9 @@ resto do progresso (os pontos gastos nos nós da árvore do outro personagem vol
 As técnicas do Gojo usam as mesmas teclas do Sukuna. Nesta versão existem o **Azul** (com o
 Azul V1), o **Vermelho** (com o Vermelho V1), o **Roxo** (com o Roxo V1 e o Roxo 200%) e o
 **Mugen** e a expansão de domínio, o **Vazio Ilimitado**. No menu, o painel do meio mostra a
-árvore de habilidades do Gojo no lugar da do Sukuna (ver abaixo). O pacto da Flecha de fogo
-não aparece para o Gojo; o "Só os punhos" também proíbe o Azul.
+árvore de habilidades do Gojo no lugar da do Sukuna (ver abaixo). Os pactos só do Sukuna não
+aparecem para o Gojo, e ele tem os dele (ver Pactos); o "Só os punhos" também proíbe o Azul.
+Os tempos de espera das técnicas do Gojo aparecem embaixo da barra azul, como os do Sukuna.
 
 ### Árvore do Gojo
 
@@ -46,7 +55,7 @@ o Vazio 20, e o Mugen ligado dá 2 a cada 5 s.
 - **Vazio Ilimitado:** maestria 45. Nós: raio, duração, menos energia (abrir e manter).
 
 Uma técnica bloqueada avisa o que falta quando a tecla é apertada. Trocar de personagem com
-`/sukuna personagem` devolve os pontos gastos nos nós do outro (a técnica reversa, que é dos
+`/jujutsu personagem` devolve os pontos gastos nos nós do outro (a técnica reversa, que é dos
 dois, fica).
 
 ### Azul (tecla R)
@@ -85,8 +94,10 @@ mira, a 9 blocos dos olhos (ou um pouco antes do que a mira encontra, nunca a me
 - **Arranca blocos** num raio de 4,8 blocos do centro, os mais perto primeiro, 4 a cada dois
   ticks, até 160 por esfera: cada um sai como um bloco caindo, que ela puxa e segura. Quando
   ela some, eles caem e se assentam onde pararem (ou viram item, se não couberem). Nunca tira o
-  chão perto do jogador, nem bedrock, água, lava, portais e afins. Com "Cortar o terreno: NÃO"
+  chão perto do jogador, nem bedrock, água, lava, portais e afins. Com "Destruição de blocos: NÃO"
   ela não arranca nada.
+- **Destrói o que já absorveu**: um bloco arrancado que chega ao corpo da esfera some (não vira
+  item). Assim, segurando o Azul V1 parado num lugar, ele vai comendo o terreno em volta.
 - Gasta 30 + 7% da energia máxima (vezes a barra da direita), uma vez, ao criar; recarga de
   6 s; só um no ar por vez. A recarga é separada da do Azul normal.
 
@@ -98,8 +109,8 @@ Segure **V**: a carga tem três estágios.
 2. De 0,5 a 1,5 s: ela cresce e aparecem raios vermelhos e faíscas em volta.
 3. De 1,5 a 2 s: raios e faíscas no máximo; cheia, ela pulsa.
 
-Cada estágio tem o seu som. **Solte V**: uma explosão vermelha 2,5 blocos à frente (antes de uma
-parede, se houver), sem fogo, que **empurra tudo para longe** (sempre um pouco para cima) e
+Cada estágio tem o seu som. **Solte V**: uma explosão vermelha **em volta de você**, sem fogo,
+que **empurra tudo para longe** (sempre um pouco para cima) e
 fere quem está perto, com uma onda de choque: uma casca vermelha que cresce, acende uma faixa
 onde corta o terreno e entorta a imagem por onde passa, mais um clarão no começo e um tranco na
 câmera. Com menos de 0,5 s, nada sai e nada se gasta. Segurado cheio por mais de 10 s, dispara
@@ -107,9 +118,10 @@ sozinho.
 
 - O foco é **dano numa área pequena**: o raio vai de 2 blocos (barra da direita vazia) a **5
   blocos** (barra cheia) e nunca passa disso. A carga (25% a 100%) e a barra aumentam o dano, de
-  19 a 80 (vezes a força do jogador, menos na borda), e o empurrão. Abre uma cratera pequena
-  onde houver blocos (até 2 blocos de raio; um a cada três voa para fora). Nunca o chão do
-  jogador; com "Cortar o terreno: NÃO", sem cratera.
+  19 a 80 (vezes a força do jogador, menos na borda), e o empurrão. **Destrói blocos em volta de
+  você**: uma cratera de cerca de 1,6 a 4,5 blocos de raio (cresce com a carga e com a barra; um bloco a
+  cada três voa para fora). O chão embaixo dos seus pés fica; com "Destruição de blocos: NÃO",
+  sem cratera.
 - Gasta 18 + 4% da energia máxima (vezes a barra da direita) ao disparar; recarga de 3 s.
 
 ### Vermelho V1 (V cheio + botão direito)
@@ -121,20 +133,20 @@ explode onde bater (num mob ou um pouco antes do bloco), na força toda e maior 
 Vermelho comum: empurra até 12 blocos, fere até 5, com até 30 de dano, e abre uma cratera.
 Antes de encher, o botão direito só avisa. O gasto e a recarga são os do Vermelho.
 
-### Roxo (R + V juntas, duas vezes)
+### Roxo (R + V juntas)
 
-Aperte **R e V juntas** (uma logo depois da outra, em até 0,25 s), solte, e faça de novo em até
-0,9 s. Na primeira vez aparece "Roxo: R + V de novo, rápido" e o que as teclas começaram (o Azul,
-a carga do Vermelho) se desfaz, com a energia devolvida. Na segunda, uma esfera azul e uma
-vermelha surgem dos lados, na frente, e se juntam (0,45 s) numa roxa pequena, com um clarão.
+Aperte **R e V juntas** (uma logo depois da outra, em até 0,25 s), **uma vez só**. O que as
+teclas começaram (o Azul, a carga do Vermelho) se desfaz, com a energia devolvida, e uma esfera
+azul e uma vermelha surgem dos lados, na frente, e se juntam (0,45 s) numa roxa, com um clarão.
 
 - **Enquanto R ou V estiver segurada**, ela carrega: a barra roxa embaixo da mira enche em
-  2,5 s, e a esfera cresce, com faíscas.
+  2,5 s, e a esfera cresce, com faíscas. **A esfera que você vê na frente é do tamanho da que
+  vai sair**: o que cresce na carga é o que é lançado.
 - **Soltando as duas**, ela é lançada para onde você mira. Solta cedo, é o **Roxo compacto**
   (apaga 0,8 bloco de raio, vai 40 blocos); cheia, o **Roxo clássico** (2,6 blocos de raio, 100
   blocos, mais rápido e mais forte). No meio, no meio.
 - Ele **apaga** o que estiver no caminho: os blocos somem sem deixar item (nunca o chão do
-  jogador, nem bedrock, água, lava e portais; com "Cortar o terreno: NÃO", nenhum) e cada mob
+  jogador, nem bedrock, água, lava e portais; com "Destruição de blocos: NÃO", nenhum) e cada mob
   que ele atravessa leva 20 a 80 de dano (vezes a força), uma vez. No fim, some com um estalo
   roxo.
 - Gasta (25 + 6% da energia máxima) vezes 1 a 2 com a carga, vezes a barra da direita, ao
@@ -143,8 +155,10 @@ vermelha surgem dos lados, na frente, e se juntam (0,45 s) numa roxa pequena, co
 ### Roxo V1 (Vermelho V1 num Azul V1)
 
 Deixe um **Azul V1 parado** (solto) e lance um **Vermelho V1** através dele: os dois se fundem
-numa esfera roxa instável no lugar do Azul ("Roxo instável: 7 segundos, saia de perto!"). Ela
-pulsa cada vez mais rápido e as faíscas crescem; em **7 segundos** explode. A explosão é
+numa esfera roxa instável no lugar do Azul ("Roxo instável: 6 segundos, saia de perto!"), com
+um tranco leve na câmera. Ela **cresce até ficar 50% maior**, chegando ao tamanho todo em **4
+segundos**; daí em diante **solta raios roxos** e pulsa cada vez mais rápido, e em **6 segundos**
+explode. A explosão é
 **catastrófica**, sem fogo, e **quanto mais cheia a barra da direita (M) na hora da fusão, mais
 forte**: de 3 a 7 vezes a do Vermelho V1.
 
@@ -154,14 +168,15 @@ forte**: de 3 a 7 vezes a do Vermelho V1.
 | meia | 60 blocos | 25 blocos | 750 | 10 blocos | até 42 |
 | cheia | 84 blocos | 35 blocos | 1470 | 14 blocos | até 60 |
 
-O dano nos mobs é vezes a força do jogador, menos na borda. **Fere o jogador também**, se você
+O dano nos mobs é vezes a força do jogador, menos na borda. **A explosão destrói blocos** (a
+cratera da tabela; com "Destruição de blocos: NÃO", nenhum). **Fere o jogador também**, se você
 estiver dentro do alcance de ferir (com a barra cheia, 60 de dano mata sem armadura). A
 cratera arranca tudo no raio (até 200 blocos voam para fora); abrir uma de 14 blocos pode
 travar o jogo um instante.
 
 ### Roxo 200% (Shift + o gesto do Roxo)
 
-Com **Shift** segurado, faça o gesto do Roxo (R + V, duas vezes). Uma cena de pouco mais de 3 s:
+Com **Shift** segurado, faça o gesto do Roxo (R + V juntas, uma vez). Uma cena de pouco mais de 3 s:
 
 1. Uma esfera azul e uma vermelha grandes surgem atrás de você, acima dos ombros (1 s).
 2. Elas passam por cima dos seus ombros até a frente (1 s).
@@ -201,6 +216,11 @@ concentração, e soltar antes não abre nada). O domínio fechado nasce dos seu
 de raio 20 (barra da direita vazia) a 125 blocos (cheia) cresce em 1,6 s, com uma película
 colorida na parede, e quando se fecha há um clarão branco. Aí o mundo some:
 
+- **A barreira é preta por fora**: de fora, o domínio é uma esfera negra, só com um brilho fraco
+  na borda. **De dentro não se vê nada do mundo de fora**, nem os blocos além da parede.
+- **Você não sai da barreira**: chegando perto da parede, você é empurrado de volta para
+  dentro.
+
 - **Dentro é o vazio**: um espaço sem fim, escuro, com estrelas, nuvens de luz azul e roxa,
   fios de informação correndo e, para onde você olhava ao abrir, um **buraco negro enorme**:
   a sombra preta, o anel fino em cores na borda e o gás branco-azulado girando em espiral em
@@ -214,7 +234,8 @@ colorida na parede, e quando se fecha há um clarão branco. Aí o mundo some:
   andam, não atacam e nem viram a cabeça; o que não é vivo (itens, barcos, carrinhos) para no
   ar (`NoGravity`). **Projéteis não param** (flechas, tridentes, bolas de neve, bolas de fogo,
   cargas de vento, poções jogadas...), nem você. Quem entra depois também é pego. No fim,
-  cada um volta exatamente como estava (um mob que já era `NoAI` continua sendo).
+  cada um volta exatamente como estava (um mob que já era `NoAI` continua sendo), mas só **2
+  segundos depois** de o domínio fechar: nesse tempo os mobs continuam paralisados.
 - Dura 15 s; **B de novo** fecha antes. A esfera encolhe de volta até você em 1,2 s e o
   mundo volta. Abrir gasta 60 + 12% da energia máxima, manter gasta como o domínio do Sukuna
   (6 + 0,75% da máxima por segundo), tudo vezes a barra da direita; sem energia, fecha
@@ -224,7 +245,7 @@ colorida na parede, e quando se fecha há um clarão branco. Aí o mundo some:
 
 ## Como usar no jogo
 
-1. Segure **R** (dá para trocar em Opções > Mods > Sukuna).
+1. Segure **R** (dá para trocar em Opções > Mods > Jujutsu Horizon).
 2. Com R segurado, segure o **botão esquerdo do mouse** e mova a mira: sai um traço vermelho no ar.
    Solte o botão e segure de novo para fazer outro traço (até 8).
 3. Solte **R**: cada traço vira um corte.
@@ -259,6 +280,16 @@ Enquanto uma técnica está em uso, o corpo do jogador se move com ela, com a pe
 - **Redemoinho do Cleave:** os dois braços para cima e abertos, em Y, com os cotovelos um
   pouco dobrados, tremendo de leve enquanto G fica segurado.
 
+Do Gojo:
+
+- **Azul e Vermelho:** a mão direita na frente do rosto, com a palma para cima, e o poder
+  se formando e flutuando acima dela. Ao lançar, a mão sai dessa pose para a frente, como o
+  empurrão do Desmantelar.
+- **Azul V1:** enquanto R fica segurado, a pose clássica: a mão direita erguida ao lado do
+  rosto, com o cotovelo para baixo e para fora.
+- **Roxo:** os braços se abrem para os lados, onde nascem o Azul e o Vermelho, e se fecham na
+  frente quando os dois se juntam; o lançamento é o mesmo empurrão para a frente.
+
 Em terceira pessoa o mod desenha o corpo inteiro com a pele do jogador (largo ou fino); nesse
 tempo a armadura, o item na mão e a capa não aparecem. Em primeira pessoa a mão do jogo some
 e entram os dois braços do mod, nos cantos de baixo da tela, como os do jogo. Sem técnica em
@@ -292,6 +323,19 @@ do jogo, como sempre.
   sai e ele fica **desnorteado por 1,5 s** (parado, sem atacar, com estrelinhas em volta da
   cabeça).
 
+### Black Flash
+
+Logo depois de um soco **acertar**, aperte **os dois botões do mouse juntos** (esquerdo e
+direito, com no máximo 0,08 s entre eles) numa janela curtinha de **0,25 s** a partir do
+impacto: o golpe vira um **Black Flash**. Os dois botões têm que descer depois do soco acertar.
+
+- O mob leva mais uma vez e meia o dano do soco (pelo menos 6), é empurrado e fica
+  desnorteado por 0,5 s; tranco na câmera, estrondo e "BLACK FLASH" na tela.
+- **No chão**, o impacto solta raios vermelhos e escuros, curtos e juntos, e um clarão em volta.
+- **No ar**, os raios saem **negros e mais espalhados**, até 4,5 blocos; cada outro mob a até 4,5
+  blocos do impacto leva 1 de dano (fora o que levou o soco).
+- A janela é a mesma com qualquer soco que acerta (carregado, rápido ou de combo).
+
 As animações (guarda, carga, golpe, defesa e tapa) aparecem em terceira pessoa com o corpo
 inteiro e em primeira pessoa com os braços.
 
@@ -300,12 +344,18 @@ inteiro e em primeira pessoa com os braços.
 Aceite uma restrição por um tempo e ganhe dano em troca, como o pacto que deixa o domínio
 aberto mais forte por abrir mão da barreira:
 
-| Pacto | Restrição | Recompensa |
-|---|---|---|
-| Sem expansão de domínio | não abrir o domínio por 10 minutos | +30% de dano |
-| Sem Flecha de Fogo | não usar a Flecha de Fogo por 10 minutos | +20% de dano |
-| Sem técnica reversa | não se curar pela reversa por 10 minutos | +25% de dano |
-| Só os punhos | nenhuma técnica, nem a reversa, por 5 minutos | +60% de dano |
+| Pacto | Quem | Restrição | Recompensa |
+|---|---|---|---|
+| Sem expansão de domínio | os dois | não abrir o domínio por 10 minutos | +30% de dano |
+| Sem técnica reversa | os dois | não se curar pela reversa por 10 minutos | +25% de dano |
+| Só os punhos | os dois | nenhuma técnica, nem a reversa, por 5 minutos | +60% de dano |
+| Corpo como preço | os dois | metade da vida máxima por 5 minutos | +35% de dano |
+| Sem Flecha de Fogo | Sukuna | não usar a Flecha de Fogo por 10 minutos | +20% de dano |
+| Sem Cleave | Sukuna | não usar o Cleave (nem o Corte de teia) por 10 minutos | +15% de dano |
+| Sem Vazio Roxo | Gojo | nenhum Roxo (nem o V1, nem o 200%) por 10 minutos | +25% de dano |
+| Sem Infinito | Gojo | não ligar o Mugen por 10 minutos | +15% de dano |
+
+O painel só mostra os pactos do personagem que você está usando.
 
 - Clique em **ACEITAR** e depois em **CONFIRMAR?** (em até 3 segundos): o pacto está selado.
 - Um pacto **não se quebra**: enquanto dura, a técnica proibida não sai e o aviso mostra quanto
@@ -324,7 +374,7 @@ mesmo tempo. No golpe, o corpo do mob pisca em vermelho.
 
 ## Cleave
 
-1. Mire num mob a até 5 blocos e **segure G** (tecla trocável em Opções > Mods > Sukuna).
+1. Mire num mob a até 5 blocos e **segure G** (tecla trocável em Opções > Mods > Jujutsu Horizon).
 2. O mob é preso diante de você, com o peito na mira, e segue a mira enquanto G estiver segurado.
 3. Ele leva um corte pequeno a cada 3 ticks, cada vez mais fundo: de arranhões a osso em uns
    doze cortes. O corpo mostra os oito cortes mais recentes.
@@ -359,7 +409,7 @@ barra no momento em que é usada:
 
 ## Flecha de fogo
 
-1. **Segure V** (tecla trocável em Opções > Mods > Sukuna): o fogo se junta entre as mãos,
+1. **Segure V** (tecla trocável em Opções > Mods > Jujutsu Horizon): o fogo se junta entre as mãos,
    em espiral, e vira uma flecha que se forma de trás até a ponta enquanto a mão direita a
    puxa até o rosto. A carga enche em 1,5 segundo;
    menos de 0,35 segundo não dispara.
@@ -400,7 +450,7 @@ de longe. Crateras grandes não avisam os blocos vizinhos (seriam atualizações
 areia e água na borda ficam paradas até algo mexer nelas. Nada é cavado nos cinco blocos mais
 fundos do mundo, onde fica o bedrock.
 
-Com "Cortar o terreno" em NÃO, a explosão não cava cratera.
+Com "Destruição de blocos" em NÃO, a explosão não cava cratera.
 
 O shader da Nuke é grande e é montado em segundo plano na primeira vez que o mod desenha
 algo. Enquanto ele não está pronto (alguns segundos), ou se a placa não puder desenhá-lo
@@ -426,7 +476,7 @@ Dentro do domínio, por 15 segundos:
 - no domínio **aberto**, cortes finos caem no terreno em direções sorteadas e fatiam o que
   está de pé (árvores, construções, morros) do chão dos seus pés para cima, ao longo de
   linhas: o resto fica, e não volta. Só o chão do santuário (e em volta de você) é limpo de
-  todo, para ele caber. Com "Cortar o terreno" em NÃO, o terreno fica;
+  todo, para ele caber. Com "Destruição de blocos" em NÃO, o terreno fica;
 - no domínio **fechado**, só sobram o piso e o santuário: o chão dentro da barreira (a camada
   logo abaixo dos seus pés) vira um piso preto com uma lâmina de água rasa por cima, que
   reflete a abóbada em brasa, e **tudo o que está acima do piso, dentro da barreira, some**
@@ -441,7 +491,7 @@ Dentro do domínio, por 15 segundos:
   são tiradas a cada meio segundo, e mais uma vez logo antes de tudo voltar. **Quando o domínio
   acaba, tudo volta exatamente como era**, como se nunca tivesse sumido (os quadros no lugar),
   quase sempre num tick só. Se o mundo fechar com o domínio aberto, tudo volta antes de o mundo
-  ser salvo. Isso não depende de "Cortar o terreno" (nada se perde). Bedrock, portais e blocos
+  ser salvo. Isso não depende de "Destruição de blocos" (nada se perde). Bedrock, portais e blocos
   de comando ficam como estão. A água do piso é só desenho: não molha nem escorre. Vale para o
   domínio fechado de qualquer personagem (o do Gojo, quando vier, usa o mesmo);
 - o santuário nasce logo atrás de você, virado para onde você olhava, e é o meio do domínio
@@ -480,11 +530,13 @@ verde enquanto a reversa durar; a fumaça que já tinha saído vermelha se desfa
 
 ## Comandos
 
-**/sukuna personagem <sukuna|gojo>**: troca o personagem do mundo (ver a escolha no topo).
+Todos aceitam **/jujutsu** ou **/sukuna**.
 
-## Comando /sukuna max
+**/jujutsu personagem <sukuna|gojo>**: troca o personagem do mundo (ver a escolha no topo).
 
-Digite **/sukuna max** no chat: nível 500, os cinco status em 500, maestria 100, todos os nós
+## Comando /jujutsu max
+
+Digite **/jujutsu max** no chat: nível 500, os cinco status em 500, maestria 100, todos os nós
 da árvore no máximo (todas as técnicas liberadas, inclusive o corte do mundo), energia cheia,
 barra de poder cheia, recargas zeradas e **pontos de loja sem limite** (o painel mostra "SEM
 LIMITE" e as compras não descontam nada). Fica gravado no mundo, como o progresso normal. Não
@@ -584,7 +636,7 @@ expansão 53% só para abrir e o resto nos 15 segundos aberta, e cada Desmantela
 
 Com a tecla do Cleave (**G**), sem mob na mão e mirando no chão a até 8 blocos, segure por
 1 segundo: uma teia de cortes se abre pelo chão em volta do ponto, fere todo mob em cima dela
-(o dobro do dano das opções) e, com "Cortar o terreno" em SIM, rasga o chão. O raio é de 12
+(o dobro do dano das opções) e, com "Destruição de blocos" em SIM, rasga o chão. O raio é de 12
 blocos, o dobro com a barra de poder cheia.
 
 O dragão e os cristais do End são atingidos por comando em volta de cada golpe, porque o
@@ -686,9 +738,9 @@ No terceiro estágio, **dois toques rápidos em H** ligam (ou desligam) o modo a
 perder vida você se cura sozinho até encher, sem recarga, na metade da velocidade do estágio
 e gastando 5 de energia por ponto de vida.
 
-## Configurações (painel CONFIG do menu, ou Opções > Mods > Sukuna)
+## Configurações (painel CONFIG do menu, ou Opções > Mods > Jujutsu Horizon)
 
-- **Cortar o terreno**: SIM / NÃO. Com SIM, o corte abre um rasgo de um bloco de espessura.
+- **Destruição de blocos**: SIM / NÃO. Vale para o Sukuna e para o Gojo. Com SIM, os cortes abrem rasgos e as técnicas destrutivas abrem crateras (do Gojo, todas menos o Azul comum). Com NÃO, nenhuma técnica mexe no terreno; os domínios fechados continuam limpando a área, e tudo volta no fim.
   Bedrock, água, lava e portais não são cortados.
 - **Efeitos da explosão**: COMPLETOS (a Nuke do Orbital Laser inteira), REDUZIDOS (o modo
   otimizado do próprio Orbital, com a fumaça desenhada em metade da largura e da altura) ou

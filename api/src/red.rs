@@ -28,8 +28,6 @@ pub const STAGE_TWO: f32 = 1.5;
 pub const FULL: f32 = 2.0;
 /// Segurado cheio por mais que isto, dispara sozinho.
 pub const HOLD_MAX: f32 = 10.0;
-/// A que distância dos olhos a explosão da mão acontece.
-pub const AHEAD: f64 = 2.5;
 /// O V1: a velocidade (blocos por segundo) e até onde voa.
 pub const SHOT_SPEED: f64 = 80.0;
 pub const SHOT_REACH: f64 = 90.0;
@@ -93,7 +91,8 @@ impl Blast {
             hurt_range: radius,
             damage: ((12.0 + 28.0 * p) * (1.0 + m)).round() as u32,
             push: 1.2 + 2.0 * p,
-            crater: (0.8 + 1.2 * p).min(radius * 0.6),
+            // A explosão é em volta do Gojo: a cratera abre em volta dele (o chão sob os pés fica).
+            crater: ((1.2 + 1.8 * p) * (1.0 + 0.5 * m)).min(radius * 0.9),
         }
     }
 
@@ -339,12 +338,9 @@ impl Mod {
             return;
         };
         let eye = eye_of(&*host, camera.position);
-        let look = math::look(camera.yaw, camera.pitch);
-        // Na frente, mas não dentro de uma parede: antes do que a mira encontra.
-        let ahead = host
-            .raycast(AHEAD as f32)
-            .map_or(AHEAD, |hit| (len(sub([hit.x, hit.y, hit.z], eye)) - 0.3).max(1.0));
-        self.red_fire(host, add(eye, mul(look, ahead)), power, charge.seed, &camera.dimension);
+        // O Vermelho sem variante não é lançado: explode em volta do próprio Gojo (o meio do
+        // corpo), empurrando e ferindo o que está perto, sem ferir ele.
+        self.red_fire(host, add(eye, [0.0, -0.7, 0.0]), power, charge.seed, &camera.dimension);
     }
 
     /// Paga e solta uma explosão em `at`.
