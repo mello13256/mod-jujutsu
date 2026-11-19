@@ -1,0 +1,15 @@
+# Sukuna: Desmantelar. Um mod nativo do tipo "trait mod" (docs/native-mods.md, "Trait mods").
+# Para compilar e jogar:
+#   horizon-launcher native-build <esta pasta> --trust-native-code
+[mod]
+id = "sukuna"
+version = "0.29.0"
+
+# Sem pin, o launcher compila no Horizon que a instância joga. O mod foi escrito e checado
+# no Nightly de 13/11/2026; se um Nightly mais novo não compilar, tire o "#" das duas linhas
+# abaixo para o launcher usar exatamente esse.
+# [compatibility]
+# horizon_revision = "9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0"
+
+[api]
+path = "api"

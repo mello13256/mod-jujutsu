@@ -1,0 +1,9 @@
+[package]
+name = "mod-sukuna"
+version = "0.29.0"
+edition = "2024"
+
+[dependencies]
+# O launcher aponta isto para o código do Horizon com que compila o jogo. Qualquer outra
+# dependência teria de ser um crate e versão do Cargo.lock do Horizon; este mod não usa nenhuma.
+horizon-client = { git = "https://github.com/horizon-rust/horizon" }
