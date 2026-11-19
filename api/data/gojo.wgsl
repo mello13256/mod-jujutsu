@@ -24,7 +24,8 @@ struct Sphere {
     // o centro, a partir do olho, e o raio, em blocos
     a: vec4<f32>,
     // o tipo (0 Azul, 1 Vermelho, 2 uma onda de choque, 3 Roxo, 4 o campo do Mugen, 5 uma dobra do Mugen, 6 o
-    // Vazio Ilimitado, 7 uma ondulação na água dele), a força da lente, a idade em segundos, a semente
+    // Vazio Ilimitado, 7 uma ondulação na água dele, 8 o Black Flash, 9 a aura de energia), a força da lente (na aura,
+    // a cor), a idade em segundos, a semente
     b: vec4<f32>,
     // o brilho, até onde a lente vai (em raios), a rotação de dentro (voltas por segundo; na onda de choque, a cor:
     // 0 a do Vermelho, 1 a do Roxo), e o quanto dos raios e faíscas aparece (na onda de choque: quanto ela ainda
@@ -522,6 +523,93 @@ fn mugen_fold(s: Sphere, rd: vec3<f32>, uv: vec2<f32>, scene_len: f32, time: f32
     return moved.xy - uv;
 }
 
+// A aura de energia em volta do corpo do jogador (pés em `s.a.xyz`, altura `s.a.w`, meia largura `s.c.y`, força
+// `s.c.x`, cor `s.b.y`: 0 azul, 1 vermelha, 2 verde): o ar numa casca em volta do corpo tremula como sobre o fogo,
+// subindo, e puxa para fora da silhueta o escuro do corpo em ondinhas finas, com as cores um pouco separadas (como
+// o campo do Mugen faz em volta do corpo), e um fio da cor da energia na crista de cada onda.
+struct AuraPixel {
+    on: bool,
+    shift: vec2<f32>,
+    fringe: vec2<f32>,
+    light: vec3<f32>,
+    dark: f32,
+}
+
+fn aura_color(code: f32) -> vec3<f32> {
+    if (code > 1.5) {
+        return vec3<f32>(0.25, 2.1, 0.7);
+    }
+    if (code > 0.5) {
+        return vec3<f32>(2.3, 0.12, 0.08);
+    }
+    return vec3<f32>(0.25, 0.75, 2.6);
+}
+
+fn aura_shell(s: Sphere, rd: vec3<f32>, uv: vec2<f32>, scene_len: f32, time: f32) -> AuraPixel {
+    var out = AuraPixel(false, vec2<f32>(0.0), vec2<f32>(0.0), vec3<f32>(0.0), 0.0);
+    let amount = s.c.x;
+    let body_r = s.c.y;
+    let feet = s.a.xyz;
+    let height = s.a.w;
+    let shell = 0.2 + 0.25 * amount;
+    // O eixo do corpo, dos joelhos à cabeça.
+    let a = feet + vec3<f32>(0.0, 0.25, 0.0);
+    let b = feet + vec3<f32>(0.0, height - 0.15, 0.0);
+    let u = b - a;
+    let uu = dot(u, u);
+    let ru = dot(rd, u);
+    let den = uu - ru * ru;
+    var k = 0.0;
+    if (den > 1.0e-6) {
+        k = clamp((dot(rd, a) * ru - dot(u, a)) / den, 0.0, 1.0);
+    }
+    let axis = a + u * k;
+    let tc = max(dot(axis, rd), 0.0);
+    let p = rd * tc;
+    let dist = length(axis - p);
+    if (dist > body_r + shell || tc < 0.3) {
+        return out;
+    }
+    // Atrás de outra coisa (um bloco entre o olho e o corpo), não aparece.
+    if (scene_len < tc - body_r - shell) {
+        return out;
+    }
+    // A casca: nada no meio do corpo, cheia na borda da silhueta, sumindo para fora.
+    let x = (dist - body_r * 0.5) / (body_r * 0.5 + shell);
+    let band = smoothstep(0.0, 0.22, x) * (1.0 - smoothstep(0.35, 1.0, x));
+    // Some nos pés e acima da cabeça; nada colado aos olhos (na primeira pessoa).
+    let up = (p.y - feet.y) / height;
+    let along = smoothstep(-0.05, 0.12, up) * (1.0 - smoothstep(0.92, 1.12, up));
+    let near = smoothstep(0.7, 1.8, tc);
+    let weight = band * along * near * amount;
+    if (weight < 0.002) {
+        return out;
+    }
+    // O ar subindo: ruído que anda para cima, e ondas finas que se abrem para fora.
+    let local = p - feet;
+    let q = local * 3.4 + vec3<f32>(0.0, -time * 1.9, time * 0.3);
+    let n = vec2<f32>(fvnoise3(q) - 0.5, fvnoise3(q + vec3<f32>(31.7, 7.3, 2.9)) - 0.5);
+    // As ondas acompanham a silhueta, tortas pelo ruído e subindo.
+    let wave = sin(dist * 40.0 - time * 5.0 + sin(local.y * 6.0 - time * 3.0) * 1.2 + n.x * 9.0);
+    let side = normalize(cross(rd, vec3<f32>(0.0, 1.0, 0.0)) + vec3<f32>(1.0e-5, 0.0, 0.0));
+    let outward = normalize(p - axis + vec3<f32>(1.0e-5, 0.0, 0.0));
+    let push = (outward * (0.6 + 0.6 * wave) + side * n.x * 1.2 + vec3<f32>(0.0, 1.0, 0.0) * (0.25 + n.y)) * 0.085 * weight;
+    let moved = project(p + push);
+    if (moved.z <= 0.0) {
+        return out;
+    }
+    out.on = true;
+    out.shift = moved.xy - uv;
+    // A cor separada puxa para o azul do céu: só na aura azul ela aparece inteira.
+    out.fringe = out.shift * select(0.25, 0.7, s.b.y < 0.5);
+    // Os vales das ondas escurecem; as cristas acendem um fio da cor da energia.
+    let trough = pow(max(-wave, 0.0), 3.0);
+    let crest = pow(max(wave, 0.0), 8.0);
+    out.dark = trough * weight * 0.8;
+    out.light = aura_color(s.b.y) * (crest * 0.4 + 0.04) * weight;
+    return out;
+}
+
 // ---- O Vazio Ilimitado ----
 // Dentro do domínio, tudo o que não é uma entidade vira o vazio: um espaço sem fim, escuro, cheio de estrelas, de
 // nuvens de luz e de fios de informação correndo para um buraco negro enorme, com um anel que muda de cor e um
@@ -835,6 +923,17 @@ fn fs_main(in: StageIn) -> @location(0) vec4<f32> {
                 touched = true;
                 dark = max(dark, f.w);
                 halo = halo + f.xyz;
+            }
+            continue;
+        }
+        if (s.b.x > 8.5 && s.b.x < 9.5) {
+            let A = aura_shell(s, rd, uv, scene_len, time);
+            if (A.on) {
+                touched = true;
+                shift = shift + A.shift;
+                fringe = fringe + A.fringe;
+                halo = halo + A.light;
+                dark = max(dark, A.dark);
             }
             continue;
         }

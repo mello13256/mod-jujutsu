@@ -10,7 +10,7 @@ use horizon_client::mod_api::{
     NativeClientState, NativeHeightmap, NativeHit, NativeMod, NativeWorldEpoch, Text,
     dispatch_frame, dispatch_key,
     dispatch_entity_outline, dispatch_level_tick_post, dispatch_mods, dispatch_mouse_button_pre, dispatch_potential_spawns, dispatch_settings,
-    dispatch_settings_click, dispatch_tick,
+    dispatch_settings_click, dispatch_tick, dispatch_entity_tick_listened, dispatch_entity_tick_pre,
 };
 
 const OVERWORLD: &str = "minecraft:overworld";
@@ -45,6 +45,9 @@ struct Game {
     hints: usize,
     /// Para onde o servidor levou cada mob, e os empurrões que deu.
     moved: Vec<(u32, [f64; 3])>,
+    /// Para onde `entity_teleport_to` levou cada entidade, e os ticks de mob que um mod pulou.
+    warped: Vec<(u32, [f64; 3])>,
+    skipped: Vec<u32>,
     pushed: Vec<(u32, [f64; 3])>,
     stopped: usize,
     /// Os empurrões no jogador.
@@ -106,6 +109,8 @@ impl Game {
             sounds: Vec::new(),
             hints: 0,
             moved: Vec::new(),
+            warped: Vec::new(),
+            skipped: Vec::new(),
             pushed: Vec::new(),
             stopped: 0,
             kicked: Vec::new(),
@@ -449,6 +454,22 @@ impl Host for Game {
         }
         true
     }
+    fn entity_teleport_to(&mut self, entity: EntityRef, pos: [f64; 3], _rotation: Option<[f32; 2]>) -> bool {
+        self.warped.push((entity.id(), pos));
+        if let Some(e) = self.entities.iter_mut().find(|e| e.id == entity.id()) {
+            let shift = [pos[0] - e.position[0], pos[1] - e.position[1], pos[2] - e.position[2]];
+            e.position = pos;
+            for corner in &mut e.bounds {
+                for axis in 0..3 {
+                    corner[axis] += shift[axis];
+                }
+            }
+        }
+        true
+    }
+    fn entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
+        self.entities.iter().find(|e| e.id == entity.id()).map(|e| e.bounds)
+    }
     fn entity_set_velocity(&mut self, entity: EntityRef, velocity: [f64; 3]) -> bool {
         if velocity == [0.0; 3] {
             self.stopped += 1;
@@ -582,6 +603,16 @@ impl Hooks for Shared {
     ) {
         self.0.level_tick_post(host, event);
     }
+    fn entity_tick_listened(&self, host: &mut dyn Host, event: &mut horizon_client::mod_api::EntityTickListenedEvent) {
+        self.0.entity_tick_listened(host, event);
+    }
+    fn entity_tick_pre(
+        &self,
+        host: &mut dyn Host,
+        event: &mut horizon_client::mod_api::EntityTickPreEvent<'_>,
+    ) -> horizon_client::mod_api::Flow {
+        self.0.entity_tick_pre(host, event)
+    }
     fn command(
         &self,
         host: &mut dyn Host,
@@ -639,6 +670,24 @@ fn tick(game: &mut Game, mods: &[Box<dyn Hooks>]) {
     game.window = true;
     dispatch_tick(game, mods);
     game.window = false;
+    // Como o Horizon: se um mod escuta, cada mob ouve o Pre antes de andar (as flechas, não).
+    let mut listened = false;
+    dispatch_entity_tick_listened(game, mods, &mut listened);
+    if listened {
+        let mobs: Vec<(u32, String)> = game
+            .entities
+            .iter()
+            .filter(|e| !e.kind.contains("arrow") && !e.kind.ends_with(":item"))
+            .map(|e| (e.id, e.kind.clone()))
+            .collect();
+        for (id, kind) in mobs {
+            let mut canceled = false;
+            dispatch_entity_tick_pre(game, mods, OVERWORLD, id, &kind, &mut canceled);
+            if canceled {
+                game.skipped.push(id);
+            }
+        }
+    }
     dispatch_level_tick_post(game, mods, OVERWORLD);
     dispatch_tick(game, mods);
     game.window = true;
@@ -3390,23 +3439,51 @@ fn the_mugen_slows_what_comes_close_and_no_blow_lands() {
     assert!(the_mod.state.lock().unwrap().gojo.mugen.on);
     assert!(the_mod.state.lock().unwrap().grab.is_none(), "não é o Cleave");
     let energy = the_mod.state.lock().unwrap().rpg.energy;
-    // O zumbi a dois blocos, vindo direto: quase para. Uma flecha a 2,8, vindo rápido: freada.
-    game.entities[0] = mob(7, "minecraft:zombie", [0.5, 64.0, 2.5]);
-    game.entities.push(mob(30, "minecraft:arrow", [0.5, 65.0, 3.3]));
+    use crate::math::{len, sub};
+    let center = [EYE[0], EYE[1] - 1.62 + 0.9, EYE[2]];
+    let range = the_mod.state.lock().unwrap().gojo.mugen.range();
+    let stop = crate::mugen::stop_at(0.3, true);
+    // O zumbi a 2,5 blocos: o tempo dele passa mais devagar, e parte dos ticks dele é pulada.
+    game.entities[0] = mob(7, "minecraft:zombie", [0.5, 64.0, 3.0]);
+    // Uma flecha a 2,8, vindo rápido: freada; o item no chão vem para ser pego.
+    game.entities.push(mob(30, "minecraft:arrow", [0.5, 64.4, 3.3]));
     game.known.insert(30, 30);
-    game.speeds.insert(7, [0.0, 0.0, -0.3]);
     game.speeds.insert(30, [0.0, 0.0, -2.0]);
-    // O item no chão vem para ser pego.
     game.entities.push(mob(31, "minecraft:item", [0.5, 64.0, 1.5]));
     game.known.insert(31, 31);
     game.speeds.insert(31, [0.0, 0.0, -0.2]);
     game.velocities.clear();
     tick(&mut game, &mods);
-    let zombie = game.velocities.iter().find(|(id, _)| *id == 7).expect("o zumbi").1;
     let arrow = game.velocities.iter().find(|(id, _)| *id == 30).expect("a flecha").1;
-    assert!(zombie[2] > -0.3 * 0.3, "quase parado: {zombie:?}");
-    assert!(arrow[2] > -2.0 * 0.7, "freada: {arrow:?}");
-    assert!(!game.velocities.iter().any(|(id, _)| *id == 31));
+    assert!(arrow[2] > -2.0 * 0.5, "freada: {arrow:?}");
+    assert!(!game.velocities.iter().any(|(id, _)| *id == 31), "o item chega");
+    let pace = |d: f64| crate::mugen::pace(d, stop, range);
+    let expected = pace(len(sub([0.5, 64.975, 3.0], center)));
+    assert!(expected > 0.3 && expected < 0.9, "{expected}");
+    game.skipped.clear();
+    for _ in 0..40 {
+        tick(&mut game, &mods);
+    }
+    let skipped = game.skipped.iter().filter(|id| **id == 7).count();
+    let walked = 40 - skipped;
+    assert!((walked as f64 - 40.0 * expected).abs() <= 2.0, "andou {walked} de 40 ticks, esperado {expected}");
+    // Os pulados ficam no lugar (sem repetir o passo na tela).
+    assert!(game.warped.iter().any(|(id, _)| *id == 7));
+    // Bem perto da parada, quase nunca anda.
+    game.entities[0] = mob(7, "minecraft:zombie", [0.5, 64.0, 0.5 + stop + 0.05]);
+    tick(&mut game, &mods);
+    game.skipped.clear();
+    for _ in 0..40 {
+        tick(&mut game, &mods);
+    }
+    assert!(game.skipped.iter().filter(|id| **id == 7).count() >= 38, "quase parado no tempo");
+    // O jogador anda para cima dele: ele é posto de volta na parada, onde o golpe não alcança.
+    game.entities[0] = mob(7, "minecraft:zombie", [0.5, 64.0, 1.4]);
+    game.warped.clear();
+    tick(&mut game, &mods);
+    let back = game.warped.iter().rev().find(|(id, _)| *id == 7).expect("posto de volta").1;
+    let d = len(sub([back[0], back[1] + 0.975, back[2]], center));
+    assert!((d - stop).abs() < 0.02 && back[1] == 64.0, "{back:?} a {d}");
     // Nenhum golpe com alguém por trás chega; o que não tem ninguém (uma queda), sim.
     assert!(hurt_player(&mods, 7, 4.0).1);
     assert!(!hurt_player(&mods, 0, 4.0).1);
@@ -3427,6 +3504,12 @@ fn the_mugen_slows_what_comes_close_and_no_blow_lands() {
     dispatch_key(&mut game, &mods, "key.keyboard.g", true);
     assert!(!the_mod.state.lock().unwrap().gojo.mugen.on);
     assert!(!hurt_player(&mods, 7, 4.0).1);
+    // Desligado, o tempo de todos volta ao normal.
+    game.skipped.clear();
+    for _ in 0..5 {
+        tick(&mut game, &mods);
+    }
+    assert!(game.skipped.is_empty());
     dispatch_key(&mut game, &mods, "key.keyboard.g", false);
     dispatch_key(&mut game, &mods, "key.keyboard.g", true);
     the_mod.state.lock().unwrap().rpg.energy = 0.05;

@@ -427,7 +427,6 @@ fn domain_pass(
 pub struct Gpu {
     /// O santuário como malha; None se o modelo não pôde ser lido.
     shrine: Option<crate::shrine::Mesh>,
-    aura: crate::aura::Pass,
     /// Os painéis do menu, feitos na primeira vez que ele abre (a fonte vai para a GPU).
     holo: Option<crate::holo::Pass>,
     /// A flecha de fogo e o arco, feitos na primeira vez que aparecem.
@@ -653,7 +652,6 @@ impl Gpu {
         });
         Self {
             shrine: None,
-            aura: crate::aura::Pass::new(device, format),
             holo: None,
             flame: None,
             nuke: NukePass::new(device, format),
@@ -1099,7 +1097,7 @@ impl RenderHooks for Mod {
                 || s.charge.is_some()
                 || !s.arrows.is_empty()
                 || !s.blasts.is_empty()
-                || !s.aura.puffs.is_empty()
+                || s.aura.ball().is_some()
                 || !s.gojo.blues.is_empty()
                 || s.gojo.red.charge.is_some()
                 || !s.gojo.red.shots.is_empty()
@@ -1153,12 +1151,10 @@ impl RenderHooks for Mod {
             explosions.clear();
         }
         let reduced = effects == crate::Effects::Reduced;
-        let (domain, aura, gate_barrier) = {
+        let (domain, gate_barrier) = {
             let s = self.state.lock().unwrap();
             (
                 s.enabled && s.domain.as_ref().is_some_and(|domain| domain.shown() > 0.0),
-                (s.enabled && !s.aura.puffs.is_empty())
-                    .then(|| crate::aura::vertices(&s.aura.puffs, camera)),
                 s.gates
                     .barrier
                     .clone()
@@ -1203,6 +1199,8 @@ impl RenderHooks for Mod {
                 if let Some(void) = s.gojo.void.as_ref() {
                     balls.extend(void.balls(&s.dimension));
                 }
+                // A aura de energia em volta do corpo.
+                balls.extend(s.aura.ball());
                 balls.extend(
                     s.combat
                         .flashes
@@ -1221,7 +1219,6 @@ impl RenderHooks for Mod {
             && explosions.is_empty()
             && balls.is_empty()
             && !domain
-            && aura.is_none()
             && menu.is_none()
             && gate_barrier.is_none()
         {
@@ -1289,7 +1286,6 @@ impl RenderHooks for Mod {
             && bodies.vertices == 0
             && blasts.is_empty()
             && domain.is_none()
-            && aura.is_none()
             && menu.is_none()
             && gate_barrier.is_none()
         {
@@ -1694,23 +1690,6 @@ impl RenderHooks for Mod {
                     &table,
                 );
             }
-        }
-
-        // A fumaça da aura, sobre o mundo e as explosões.
-        if let Some(vertices) = &aura {
-            gpu.aura.draw(
-                world.device,
-                world.queue,
-                world.encoder,
-                world.color_view,
-                world.depth,
-                view_proj,
-                world.size,
-                world.depth_size,
-                time,
-                encoded,
-                vertices,
-            );
         }
 
         // Por fim a luz dos cortes e das flechas, por cima de tudo.

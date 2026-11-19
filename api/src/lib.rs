@@ -58,6 +58,7 @@ use horizon_client::mod_api::{
     CameraDistanceEvent, CameraPoseEvent, CommandEvent, LivingChangeTargetEvent,
     LivingExperienceDropEvent, LootDropsEvent, CommandsEvent, ServerStoppingEvent, PlayerRenderListenedEvent, PlayerSubmitEvent, RenderHandEvent, WorldSubmitEvent,
     SettingsClickEvent, SettingsEvent, Text, TickEvent, VisualsEvent, NativeZoom, ZoomEvent,
+    EntityTickListenedEvent, EntityTickPreEvent,
 };
 
 use math::{V3, add, len, lerp, mul, norm, sub};
@@ -67,7 +68,7 @@ use math::{V3, add, len, lerp, mul, norm, sub};
 /// valendo. O nome que aparece é [`NAME`].
 pub const ID: &str = "sukuna";
 pub const NAME: &str = "Jujutsu Horizon";
-pub const VERSION: &str = "0.30.0";
+pub const VERSION: &str = "0.30.1";
 const KEY: &str = "draw";
 const DEFAULT_KEY: &str = "key.keyboard.r";
 
@@ -1657,6 +1658,18 @@ impl Hooks for Mod {
     fn server_tick(&self, host: &mut dyn Host, _event: &mut ServerTickEvent<'_>) {
         self.state.lock().unwrap().server_tick_at = Some(Instant::now());
         self.reverse_server(host);
+    }
+
+    /// No servidor: o jogo só conta os ticks das entidades enquanto o Mugen está ligado.
+    fn entity_tick_listened(&self, _host: &mut dyn Host, event: &mut EntityTickListenedEvent) {
+        if self.mugen_listens() {
+            event.listened = true;
+        }
+    }
+
+    /// No servidor, antes do tick de um mob: perto do Mugen, o tempo dele passa devagar.
+    fn entity_tick_pre(&self, _host: &mut dyn Host, event: &mut EntityTickPreEvent<'_>) -> Flow {
+        if self.mugen_tick_pre(event.dimension, event.entity) { Flow::Cancel } else { Flow::Continue }
     }
 
     /// Depois do tick de cada dimensão, no servidor: fere os mobs e tira os blocos que os

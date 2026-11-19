@@ -1,5 +1,10 @@
 # Novidades do Jujutsu Horizon
 
+## 0.30.1 — 2026-11-19
+
+- **Mugen refeito**: o tempo de tudo o que se aproxima passa mais devagar na proporção do que falta até encostar. Os mobs andam, viram e atacam devagar (os ticks deles são pulados) e, com você parado, nunca chegam: param antes de o golpe deles te alcançar. Flechas e outros projéteis perdem a velocidade e ficam no ar. Se você anda para cima de algo, ele é posto de volta.
+- **Aura nova**: a fumaça saiu. No lugar dela, o ar em volta do corpo tremula em ondinhas pretas e da cor da energia (azul com o Gojo, vermelha com o Sukuna, verde com a técnica reversa), o efeito que aparecia em volta do corpo com o Mugen.
+
 ## 0.30.0 — 2026-11-19
 
 - **Novo nome: Jujutsu Horizon.** O comando agora é `/jujutsu` (o `/sukuna` continua valendo). Mundos e saves de antes continuam funcionando.

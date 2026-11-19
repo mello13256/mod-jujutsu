@@ -37,6 +37,9 @@ pub enum Kind {
     /// O Black Flash: `center` o golpe, `radius` até onde vão os raios pretos, `glow` quanto
     /// aparece, `spin` 1 no ar (mais raios, mais espalhados).
     Flash,
+    /// A aura de energia em volta do corpo do jogador: `center` os pés, `radius` a altura,
+    /// `reach` a meia largura, `glow` a força e `lens` a cor (0 azul, 1 vermelha, 2 verde).
+    Aura,
 }
 
 /// Uma esfera para desenhar: onde está no mundo, o raio, a força da lente (1 como o buraco
@@ -103,6 +106,7 @@ pub fn table(balls: &[Ball], camera: V3, inverse: [f32; 16]) -> Vec<f32> {
             Kind::Void => 6.0,
             Kind::Ripple => 7.0,
             Kind::Flash => 8.0,
+            Kind::Aura => 9.0,
         };
         out.extend_from_slice(&[at[0] as f32, at[1] as f32, at[2] as f32, ball.radius]);
         out.extend_from_slice(&[kind, ball.lens, ball.age, ball.seed]);
@@ -362,6 +366,29 @@ mod tests {
         let mut pixels = Vec::with_capacity((size[0] * size[1] * 4) as usize);
         // No teste do Vazio, um pilar magenta a 40 blocos (fora da esfera): formado, ele não pode aparecer.
         let pillar = std::env::var("SUKUNA_SPHERE_VOID").is_ok();
+        // No teste da aura, o corpo do jogador (uma caixa escura) a 3,45 blocos, de costas.
+        let player = std::env::var("SUKUNA_SPHERE_AURA").is_ok();
+        let body = |ray: V3| -> Option<(f64, usize)> {
+            let lo = [-0.3, -1.62, 3.3];
+            let hi = [0.3, 0.18, 3.6];
+            let (mut near, mut far, mut face) = (0.0f64, f64::MAX, 0usize);
+            for k in 0..3 {
+                if ray[k].abs() < 1e-9 {
+                    if lo[k] > 0.0 || hi[k] < 0.0 {
+                        return None;
+                    }
+                    continue;
+                }
+                let (t0, t1) = (lo[k] / ray[k], hi[k] / ray[k]);
+                let (a, b) = if t0 < t1 { (t0, t1) } else { (t1, t0) };
+                if a > near {
+                    near = a;
+                    face = k;
+                }
+                far = far.min(b);
+            }
+            (player && near < far && near > 0.0).then_some((near, face))
+        };
         for y in 0..size[1] {
             for x in 0..size[0] {
                 let ndc = [(x as f32 + 0.5) / size[0] as f32 * 2.0 - 1.0, 1.0 - (y as f32 + 0.5) / size[1] as f32 * 2.0];
@@ -371,7 +398,13 @@ mod tests {
                     let p = crate::math::mul(ray, *t);
                     (-8.0..-2.0).contains(&p[0]) && (-1.62..9.0).contains(&p[1])
                 });
-                if let Some(t) = hit {
+                if let Some((t, face)) = body(ray) {
+                    let p = crate::math::mul(ray, t);
+                    let clip = apply(&view_proj, [p[0] as f32, p[1] as f32, p[2] as f32, 1.0]);
+                    depths.push(clip[2] / clip[3]);
+                    let shade = [40u8, 52, 30][face];
+                    pixels.extend_from_slice(&[shade, shade - 8, shade - 4, 255]);
+                } else if let Some(t) = hit {
                     let p = crate::math::mul(ray, t);
                     let clip = apply(&view_proj, [p[0] as f32, p[1] as f32, p[2] as f32, 1.0]);
                     depths.push(clip[2] / clip[3]);
@@ -550,6 +583,7 @@ mod tests {
                 folds: Vec::new(),
                 extra: 0.0,
                 ticks: 0,
+                ..Default::default()
             };
             let field = mugen.balls("");
             let fold = |x: f64, z: f64, amount: f32| crate::mugen::Fold { at: [x, -0.6, z], size: 0.8, amount, seed: (x as f32).abs() * 0.3 };
@@ -558,6 +592,21 @@ mod tests {
             mugen.folds = vec![fold(-1.0, 2.0, 1.0), fold(0.3, 2.2, 1.0), fold(1.2, 1.9, 1.0)];
             let close = mugen.balls("");
             scenes = vec![field, some, close, mugen.balls("")[1..2].to_vec()];
+        }
+        // SUKUNA_SPHERE_AURA: a aura em volta do corpo: a do Gojo cheia, a do Sukuna a meio, a
+        // da reversa e a do Gojo fraca.
+        if std::env::var("SUKUNA_SPHERE_AURA").is_ok() {
+            let aura = |amount: f32, hue: crate::aura::Hue| {
+                let shell = crate::aura::Aura { feet: Some([0.0, -1.62, 3.45]), amount, hue, age: 1.3 };
+                vec![shell.ball().expect("acesa")]
+            };
+            use crate::aura::Hue;
+            scenes = vec![aura(1.0, Hue::Blue), aura(0.6, Hue::Red), aura(1.0, Hue::Green), aura(0.15, Hue::Blue)];
+            // =first: na primeira pessoa (os pés embaixo do olho), cheia: a tela não pode tremer toda.
+            if std::env::var("SUKUNA_SPHERE_AURA").is_ok_and(|v| v == "first") {
+                let shell = crate::aura::Aura { feet: Some([0.0, -1.62, 0.0]), amount: 1.0, hue: Hue::Blue, age: 1.3 };
+                scenes = vec![vec![shell.ball().expect("acesa")]; 4];
+            }
         }
         // SUKUNA_SPHERE_FLASH: o Black Flash no chão (no começo e no meio) e no ar (idem).
         if std::env::var("SUKUNA_SPHERE_FLASH").is_ok() {
@@ -611,7 +660,7 @@ mod tests {
             queue.write_texture(color.as_image_copy(), &pixels, layout(4), extent);
             let ball = scene[0];
             // O Vazio muda a tela toda (é o mundo em volta): não confere o que fica longe.
-            let alone = scene.len() == 1 && !matches!(ball.kind, Kind::Void | Kind::Flash);
+            let alone = scene.len() == 1 && !matches!(ball.kind, Kind::Void | Kind::Flash | Kind::Aura);
             let table = table(&scene, camera, inverse);
             let frame = frame(view_proj, inverse, size, 3.0 + age, scene.len(), true);
             let mut encoder = device.create_command_encoder(&Default::default());
@@ -661,7 +710,7 @@ mod tests {
                 Kind::Blue => middle[2] > middle[0] + 40 && middle[2] > 150,
                 Kind::Red => middle[0] > middle[2] + 40 && middle[0] > 150,
                 Kind::Purple => middle[0] > middle[1] + 40 && middle[2] > middle[1] + 40,
-                Kind::Shock | Kind::Field | Kind::Fold | Kind::Void | Kind::Ripple | Kind::Flash => true,
+                Kind::Shock | Kind::Field | Kind::Fold | Kind::Void | Kind::Ripple | Kind::Flash | Kind::Aura => true,
             };
             // Até onde a lente vai: o raio de cada pixel passa a que distância do centro.
             let reach = f64::from(ball.reach * ball.radius);
@@ -725,6 +774,11 @@ mod tests {
         for (age, blue, middle, changed, far_changed) in checks {
             eprintln!("{age} s: meio {middle:?}, {changed} pixels mudaram, {far_changed} longe");
             assert!(blue, "azul no meio aos {age} s: {middle:?}");
+            if std::env::var("SUKUNA_SPHERE_AURA").is_ok_and(|v| v == "first") {
+                // Na primeira pessoa, olhando em frente, a aura não treme a tela.
+                assert!(changed < 300, "a aura não cobre a tela na primeira pessoa ({changed})");
+                continue;
+            }
             assert!(changed > 50, "a esfera aparece aos {age} s");
             assert!(far_changed < 20, "longe dela o mundo fica como estava aos {age} s ({far_changed})");
         }

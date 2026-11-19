@@ -193,12 +193,19 @@ também.
 
 **G** liga e desliga o Infinito ("Mugen: ligado"; "MUGEN" embaixo da mira). Ligado:
 
-- **O que se aproxima fica cada vez mais devagar quanto mais perto chega**, num alcance de 3
-  blocos (barra da direita vazia) a 5 (cheia) do meio do seu corpo. A cada tick, a parte da
-  velocidade que vem na sua direção é freada (na borda, quase nada; perto, quase toda) e nunca
-  passa de 30% do que falta até 1,25 bloco de você: uma flecha rápida chega cada vez mais perto
-  e para no ar, depois cai. O que estiver mais perto que 1,25 é afastado devagar. Andar para os
-  lados ou para longe é livre.
+- **O tempo de tudo o que se aproxima passa mais devagar quanto mais perto chega**, num alcance
+  de 3 blocos (barra da direita vazia) a 5 (cheia) do meio do seu corpo. Na borda, normal; a meio
+  caminho, metade; e na distância em que encostaria, parado: a velocidade do tempo é a proporção
+  do que falta.
+- **Mobs** (e carrinhos e barcos): só andam nos ticks em que o tempo deles juntou um tick
+  inteiro. A meio caminho, um tick sim, outro não; perto, quase nunca. Tudo deles fica lento
+  junto: o passo, o virar da cabeça e a espera entre um ataque e outro. A parada de um mob é
+  antes de o golpe dele te alcançar (0,3 + meia largura dele + 0,83 + 0,2 de folga; um zumbi para
+  a 1,63 bloco), então **com você parado ele nunca chega**.
+- **Projéteis** (flechas, tridentes, bolas de fogo, blocos caindo...): perdem a velocidade do
+  mesmo jeito e ficam pendurados no ar antes de encostar. Mesmo uma flecha rápida, vinda de fora,
+  é segurada na borda.
+- Se **você** anda para cima de algo, ele é posto de volta na parada (para o lado, na mesma altura).
 - **Nenhum golpe com alguém por trás chega**: socos de mob, flechas, tridentes, até a explosão
   de um creeper. O que não tem ninguém por trás (queda, fogo, lava, afogamento) chega normal.
 - Itens e experiência não são parados, para você poder pegá-los.
@@ -514,19 +521,18 @@ Apertar **B** de novo termina o domínio antes da hora.
 O que conta como golpe na barreira são as habilidades deste mod; TNT, creepers e outros mods
 não a atingem.
 
-## Aura de energia amaldiçoada
+## Aura de energia
 
-Com a barra de poder (M) acima de 5%, o corpo solta uma fumaça como a da flecha de fogo, só
-que bem rala: preta por dentro, avermelhada nas bordas, subindo devagar dos pés à cabeça e se
-desfazendo. Entre 5% e 15% ela aparece aos poucos; depois sai mais fumaça conforme a barra
-enche, até no máximo 22 nuvens de cada vez (cada uma é um só quadrado desenhado, sem luz e
-sem passes extras). Perto dos olhos ela some, para não cobrir a tela em primeira pessoa.
+Com a barra de poder (M) acima de 5%, o ar em volta do corpo **tremula**, como sobre o fogo:
+ondinhas finas que sobem e acompanham a silhueta, **pretas e da cor da energia**: azul com o Gojo,
+vermelha com o Sukuna. Entre 5% e 15% ela aparece aos poucos; depois fica mais forte e mais
+larga conforme a barra enche. Acende e apaga devagar. Em primeira pessoa, olhando em frente, a
+tela não treme (só olhando para os pés). Não há mais fumaça.
 
 Enquanto a **técnica reversa** está sendo usada (H segurado fora da recarga, ou curando no
-automático), a fumaça que sai é **preta e verde** em vez de preta e vermelha. A força dela
-vem do estágio da reversa: no 1 é como a aura da barra em 33,33%, no 2 em 66,66% e no 3 em
-99,99%. Se a barra já estava soltando uma aura mais forte, ela continua desse tamanho, só que
-verde enquanto a reversa durar; a fumaça que já tinha saído vermelha se desfaz normalmente.
+automático), as ondinhas ficam **pretas e verdes**. A força vem do estágio da reversa: no 1 é
+como a aura da barra em 33,33%, no 2 em 66,66% e no 3 em 99,99%. Se a barra já fazia uma aura
+mais forte, ela continua desse tamanho, só que verde enquanto a reversa durar.
 
 ## Comandos
 
@@ -795,7 +801,7 @@ compilar exatamente naquele Nightly.
 - `api/src/limbs.rs`: o corpo no jogo: o desenho em terceira pessoa, os braços em primeira,
   a mão do jogo escondida e a câmera do pouso.
 - `api/src/floor.rs`: o piso do domínio fechado: guarda o chão, põe o piso e devolve o chão.
-- `api/src/aura.rs`, `api/data/aura.wgsl`: a fumaça da aura de energia amaldiçoada.
+- `api/src/aura.rs`: a aura de energia (desenhada pelo passe do `gojo.wgsl`, como uma casca em volta do corpo).
 - `api/src/progress.rs`: nível, XP, status e o que cada um vale; gastos e recargas.
 - `api/src/rpg.rs`: a energia, a experiência por abate, os atributos, o pulo e as barras.
 - `api/src/menu.rs`: o que cada painel do menu mostra (status, config, árvore, Portões,
