@@ -68,7 +68,7 @@ use math::{V3, add, len, lerp, mul, norm, sub};
 /// valendo. O nome que aparece é [`NAME`].
 pub const ID: &str = "sukuna";
 pub const NAME: &str = "Jujutsu Horizon";
-pub const VERSION: &str = "0.30.1";
+pub const VERSION: &str = "0.30.2";
 const KEY: &str = "draw";
 const DEFAULT_KEY: &str = "key.keyboard.r";
 
@@ -335,6 +335,9 @@ pub(crate) struct State {
     commands: Vec<String>,
     /// O último tick do servidor do mundo local: parado, os cortes esperam (jogo pausado).
     server_tick_at: Option<Instant>,
+    /// A pasta do mundo aberto, como o servidor integrado a vê (a janela não a tem): onde o
+    /// progresso é gravado. Vazia sem mundo aberto.
+    pub server_world: Option<std::path::PathBuf>,
     pub client_tick_at: Instant,
     pub started: Instant,
     /// A hora do dia no mundo, em ticks: o sol que ilumina a explosão.
@@ -403,6 +406,7 @@ impl State {
             cells: Vec::new(),
             commands: Vec::new(),
             server_tick_at: None,
+            server_world: None,
             client_tick_at: now,
             started: now,
             day_time: 6000,
@@ -1079,6 +1083,20 @@ pub(crate) fn spared(block: &str) -> bool {
     )
 }
 
+impl Mod {
+    /// No servidor: guarda a pasta do mundo aberto, que a janela não tem, para o progresso ser
+    /// lido e gravado nela.
+    fn remember_world(&self, host: &mut dyn Host) {
+        let Some(world) = host.world_dir() else {
+            return;
+        };
+        let mut s = self.state.lock().unwrap();
+        if s.server_world.as_ref() != Some(&world) {
+            s.server_world = Some(world);
+        }
+    }
+}
+
 impl Hooks for Mod {
     fn render(&self) -> Option<&dyn RenderHooks> {
         Some(self)
@@ -1653,10 +1671,14 @@ impl Hooks for Mod {
     fn server_stopping(&self, host: &mut dyn Host, _event: &mut ServerStoppingEvent) {
         self.void_release(host);
         self.floor_restore_all(host);
+        // Saindo do mundo: o progresso é gravado agora, e a pasta deixa de valer.
+        self.rpg_flush();
+        self.state.lock().unwrap().server_world = None;
     }
 
     fn server_tick(&self, host: &mut dyn Host, _event: &mut ServerTickEvent<'_>) {
         self.state.lock().unwrap().server_tick_at = Some(Instant::now());
+        self.remember_world(host);
         self.reverse_server(host);
     }
 
@@ -1675,6 +1697,7 @@ impl Hooks for Mod {
     /// Depois do tick de cada dimensão, no servidor: fere os mobs e tira os blocos que os
     /// cortes desta dimensão cruzaram.
     fn level_tick_post(&self, host: &mut dyn Host, event: &mut LevelTickPostEvent<'_>) {
+        self.remember_world(host);
         self.cleave_server(host, event.dimension);
         self.combat_server(host, event.dimension);
         self.fuga_server(host, event.dimension);

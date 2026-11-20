@@ -498,7 +498,8 @@ impl Host for Game {
         self.kicked.push(kick);
     }
     fn world_dir(&self) -> Option<std::path::PathBuf> {
-        self.world.clone()
+        // Como no Horizon: a pasta do mundo é do servidor integrado; a janela não a tem.
+        if self.window { None } else { self.world.clone() }
     }
     fn mod_screen(&self) -> Option<&str> {
         self.screen.then_some(crate::ID)
@@ -1921,14 +1922,24 @@ fn a_kill_by_the_player_is_xp_saved_with_the_world() {
     // O arquivo do mundo guarda o progresso, e um mod novo o lê de volta.
     let saved = std::fs::read_to_string(world.join("sukuna").join("progresso.txt")).expect("gravado");
     assert!(saved.contains("nivel=2") && saved.contains("pontos=3"), "{saved}");
+    // Um jogo novo (o mod de novo, como depois de fechar o Minecraft): a janela não tem a pasta
+    // do mundo; o servidor a conta no primeiro tick, e a janela lê o progresso no seguinte.
     let (again, mods_again, mut game_again) = paying_game(0);
     game_again.world = Some(world.clone());
+    tick(&mut game_again, &mods_again);
     tick(&mut game_again, &mods_again);
     assert_eq!(again.state.lock().unwrap().rpg.progress.level, 2);
     // Outro mundo começa do zero.
     game_again.world = Some(world.join("outro"));
     tick(&mut game_again, &mods_again);
+    tick(&mut game_again, &mods_again);
     assert_eq!(again.state.lock().unwrap().rpg.progress.level, 1);
+    // Saindo do mundo, o que ainda não tinha sido gravado vai na hora.
+    again.state.lock().unwrap().rpg.reward(13 * 8, 0);
+    horizon_client::mod_api::dispatch_server_stopping(&mut game_again, &mods_again, false);
+    let saved = std::fs::read_to_string(world.join("outro").join("sukuna").join("progresso.txt")).expect("gravado ao sair");
+    assert!(saved.contains("nivel=2"), "{saved}");
+    assert!(again.state.lock().unwrap().server_world.is_none());
     let _ = std::fs::remove_dir_all(&world);
 }
 

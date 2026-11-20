@@ -1,5 +1,10 @@
 # Novidades do Jujutsu Horizon
 
+## 0.30.2 — 2026-11-20
+
+- **Correção grave: o progresso não era gravado.** No Horizon, a pasta do mundo só existe do lado do servidor do mundo, e o mod a pedia do lado da janela, onde ela não existe; o progresso ficava só na memória e sumia ao fechar o jogo. Agora o servidor conta a pasta e o progresso é gravado em `sukuna/progresso.txt` dentro do mundo, como devia.
+- O progresso também é gravado na hora ao pausar (Esc) e ao sair do mundo, não só a cada cinco segundos, e o arquivo é trocado de uma vez (um jogo fechado no meio não deixa um arquivo pela metade).
+
 ## 0.30.1 — 2026-11-19
 
 - **Mugen refeito**: o tempo de tudo o que se aproxima passa mais devagar na proporção do que falta até encostar. Os mobs andam, viram e atacam devagar (os ticks deles são pulados) e, com você parado, nunca chegam: param antes de o golpe deles te alcançar. Flechas e outros projéteis perdem a velocidade e ficam no ar. Se você anda para cima de algo, ele é posto de volta.

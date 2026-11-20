@@ -399,22 +399,60 @@ fn fast(step: f64, walk: f64) -> bool {
     step > walk * 2.16 * 1.15
 }
 
+/// Grava o progresso em `path` (num arquivo ao lado, trocado de uma vez, para um jogo fechado no
+/// meio não deixar um arquivo pela metade).
+fn write_progress(path: &std::path::Path, text: &str) {
+    let temporary = path.with_extension("txt.novo");
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&temporary, text))
+        .and_then(|()| std::fs::rename(&temporary, path));
+    if let Err(error) = written {
+        eprintln!("sukuna: o progresso não foi gravado em {}: {error}", path.display());
+    }
+}
+
 impl Mod {
+    /// Grava agora o progresso, se há o que gravar (saindo do mundo).
+    pub(crate) fn rpg_flush(&self) {
+        let pending = {
+            let mut s = self.state.lock().unwrap();
+            let rpg = &mut s.rpg;
+            (rpg.loaded && rpg.save_due).then(|| {
+                rpg.save_due = false;
+                (rpg.file.clone(), rpg.progress.to_text())
+            })
+        };
+        if let Some((Some(path), text)) = pending {
+            write_progress(&path, &text);
+        }
+    }
+
     /// A cada tick da janela: o progresso deste mundo, a energia, a corrida e o pulo.
     pub(crate) fn rpg_tick(&self, host: &mut dyn Host) {
         let Some(camera) = host.camera() else {
             return;
         };
-        // O progresso é do mundo: lido quando o mundo muda, gravado quando muda ele.
-        let file = host
-            .world_dir()
-            .map(|dir| dir.join("sukuna").join("progresso.txt"));
+        // O progresso é do mundo: lido quando o mundo muda, gravado quando muda ele. A pasta do
+        // mundo é do servidor integrado (a janela não a tem): ele a conta a cada tick.
+        let own = host.world_dir();
         let mut push = None;
         let (news, save) = {
             let mut s = self.state.lock().unwrap();
+            // Sem pasta conhecida (o servidor ainda não contou), o progresso fica só na memória;
+            // quando ela chega, é lido do arquivo.
+            let file = own.or_else(|| s.server_world.clone()).map(|dir| dir.join("sukuna").join("progresso.txt"));
             let paused = s.paused();
             let shift = s.power.shift;
             let rpg = &mut s.rpg;
+            // A pasta chegou depois do começo (o servidor contou agora) e o mundo ainda não tem
+            // arquivo: o que já se fez nesse instante fica, e é gravado nela.
+            let first_file = rpg.loaded && rpg.file.is_none() && file.as_ref().is_some_and(|path| !path.exists());
+            if first_file {
+                rpg.file = file.clone();
+                rpg.save_due = true;
+            }
             if !rpg.loaded || rpg.file != file {
                 let free = rpg.free;
                 *rpg = Rpg::default();
@@ -428,6 +466,16 @@ impl Mod {
                 rpg.attributes_due = true;
             }
             if paused {
+                // Pausado (o menu do Esc, sair do mundo): o que falta gravar vai agora.
+                let pending = rpg.save_due.then(|| {
+                    rpg.save_due = false;
+                    rpg.save_wait = SAVE_EVERY;
+                    (rpg.file.clone(), rpg.progress.to_text())
+                });
+                drop(s);
+                if let Some((Some(path), text)) = pending {
+                    write_progress(&path, &text);
+                }
                 return;
             }
             rpg.tick();
@@ -504,13 +552,7 @@ impl Mod {
             host.push_player(push);
         }
         if let Some((Some(path), text)) = save {
-            let written = path
-                .parent()
-                .map_or(Ok(()), std::fs::create_dir_all)
-                .and_then(|()| std::fs::write(&path, text));
-            if let Err(error) = written {
-                eprintln!("sukuna: o progresso não foi gravado em {}: {error}", path.display());
-            }
+            write_progress(&path, &text);
         }
         if let Some(last) = news.last() {
             host.client_action_bar(Text::literal(last.clone()), false);
