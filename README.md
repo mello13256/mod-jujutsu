@@ -776,10 +776,11 @@ direitos no computador, sem sandbox. O código está em `api/src/` e os shaders 
 
 ## Se a compilação falhar
 
-O mod não fixa uma versão do Horizon, então compila no Nightly que a sua instância joga. Ele foi
-escrito e checado no Nightly de 13/11/2026. Se um Nightly mais novo mudou algo da API, abra o
-`horizon-mixin.toml` e tire o `#` das duas linhas de `[compatibility]`: o launcher passa a
-compilar exatamente naquele Nightly.
+O mod fixa o Nightly em que foi escrito e checado, o de 13/11/2026 (`[compatibility]` no
+`horizon-mixin.toml`), e o launcher compila nele seja qual for o Nightly que a sua instância
+joga. Isso é preciso com o launcher 0.2.69: os Nightlies mais novos (o de 22/11, por exemplo)
+mudaram as pastas do código do Horizon, e o 0.2.69 não consegue montá-los ("failed to read
+... crates\horizon-mods\Cargo.toml").
 
 ## O que cada arquivo faz
 

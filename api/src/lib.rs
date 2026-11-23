@@ -68,7 +68,7 @@ use math::{V3, add, len, lerp, mul, norm, sub};
 /// valendo. O nome que aparece é [`NAME`].
 pub const ID: &str = "sukuna";
 pub const NAME: &str = "Jujutsu Horizon";
-pub const VERSION: &str = "0.30.2";
+pub const VERSION: &str = "0.30.3";
 const KEY: &str = "draw";
 const DEFAULT_KEY: &str = "key.keyboard.r";
 

@@ -1,5 +1,9 @@
 # Novidades do Jujutsu Horizon
 
+## 0.30.3 — 2026-11-23
+
+- **Compila em quem instalou um Horizon mais novo.** Os Nightlies mais novos (o de 22/11, por exemplo) mudaram as pastas do código do Horizon, e o launcher 0.2.69 não consegue montar o código deles ("failed to read ... crates\horizon-mods\Cargo.toml"). O mod agora fixa o Nightly em que foi feito (13/11, 9f42064), e o launcher compila nele seja qual for o Nightly instalado.
+
 ## 0.30.2 — 2026-11-20
 
 - **Correção grave: o progresso não era gravado.** No Horizon, a pasta do mundo só existe do lado do servidor do mundo, e o mod a pedia do lado da janela, onde ela não existe; o progresso ficava só na memória e sumia ao fechar o jogo. Agora o servidor conta a pasta e o progresso é gravado em `sukuna/progresso.txt` dentro do mundo, como devia.
