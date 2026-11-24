@@ -1,0 +1,13 @@
+[package]
+name = "mod-sukuna"
+version = "0.31.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api" }
+
+[dev-dependencies]
+horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api", features = ["testing"] }

@@ -252,7 +252,7 @@ colorida na parede, e quando se fecha há um clarão branco. Aí o mundo some:
 
 ## Como usar no jogo
 
-1. Segure **R** (dá para trocar em Opções > Mods > Jujutsu Horizon).
+1. Segure **R** (dá para trocar em Opções > Controles, no grupo Jujutsu Horizon).
 2. Com R segurado, segure o **botão esquerdo do mouse** e mova a mira: sai um traço vermelho no ar.
    Solte o botão e segure de novo para fazer outro traço (até 8).
 3. Solte **R**: cada traço vira um corte.
@@ -381,7 +381,7 @@ mesmo tempo. No golpe, o corpo do mob pisca em vermelho.
 
 ## Cleave
 
-1. Mire num mob a até 5 blocos e **segure G** (tecla trocável em Opções > Mods > Jujutsu Horizon).
+1. Mire num mob a até 5 blocos e **segure G** (tecla trocável em Opções > Controles).
 2. O mob é preso diante de você, com o peito na mira, e segue a mira enquanto G estiver segurado.
 3. Ele leva um corte pequeno a cada 3 ticks, cada vez mais fundo: de arranhões a osso em uns
    doze cortes. O corpo mostra os oito cortes mais recentes.
@@ -416,7 +416,7 @@ barra no momento em que é usada:
 
 ## Flecha de fogo
 
-1. **Segure V** (tecla trocável em Opções > Mods > Jujutsu Horizon): o fogo se junta entre as mãos,
+1. **Segure V** (tecla trocável em Opções > Controles): o fogo se junta entre as mãos,
    em espiral, e vira uma flecha que se forma de trás até a ponta enquanto a mão direita a
    puxa até o rosto. A carga enche em 1,5 segundo;
    menos de 0,35 segundo não dispara.
@@ -744,7 +744,7 @@ No terceiro estágio, **dois toques rápidos em H** ligam (ou desligam) o modo a
 perder vida você se cura sozinho até encher, sem recarga, na metade da velocidade do estágio
 e gastando 5 de energia por ponto de vida.
 
-## Configurações (painel CONFIG do menu, ou Opções > Mods > Jujutsu Horizon)
+## Configurações (painel CONFIG do menu, ou Opções > Mods > Jujutsu Horizon > Config)
 
 - **Destruição de blocos**: SIM / NÃO. Vale para o Sukuna e para o Gojo. Com SIM, os cortes abrem rasgos e as técnicas destrutivas abrem crateras (do Gojo, todas menos o Azul comum). Com NÃO, nenhuma técnica mexe no terreno; os domínios fechados continuam limpando a área, e tudo volta no fim.
   Bedrock, água, lava e portais não são cortados.
@@ -756,89 +756,93 @@ e gastando 5 de energia por ponto de vida.
 O dano por corte (14) e o alcance (48 blocos) não são mais opções: valem sempre esses. Um
 valor que uma versão antiga tenha gravado é ignorado.
 
-## Como compilar
+## Como instalar
 
-O launcher compila o mod com o Rust dele; não precisa ter Rust instalado. No PowerShell:
+Desde a 0.31.0 o mod usa a API de mods do Horizon (o formato novo, com o `horizon-mod.toml` na
+raiz). Precisa do **launcher do Horizon 0.2.108 ou mais novo**; o 0.2.69 não lê esse formato.
+
+Pelo launcher do Horizon: **Mods > Adicionar do GitHub**, cole
+`https://github.com/mello13256/mod-jujutsu`, confirme o aviso de código nativo, e depois
+**Build** e **Jogar**. Ou no PowerShell:
 
 ```powershell
-& "$env:LOCALAPPDATA\Programs\Horizon Launcher\horizon-launcher.exe" native-build "CAMINHO\DA\PASTA\sukuna" --trust-native-code
+& "$env:LOCALAPPDATA\Programs\Horizon Launcher\horizon-launcher.exe" mods add-github https://github.com/mello13256/mod-jujutsu --trust-native-code
+& "$env:LOCALAPPDATA\Programs\Horizon Launcher\horizon-launcher.exe" native-build --trust-native-code
 ```
 
-Troque o caminho pelo da pasta onde está o `horizon-mixin.toml`. Se tiver mais de uma instância,
-acrescente `--instance "Nome da instância"`.
+Para atualizar: `mods update-github sukuna` e `native-build` de novo.
 
-A primeira compilação baixa o Rust e o código do Horizon e leva de 20 a 30 minutos. As seguintes
-levam poucos minutos. Para testar mudanças mais rápido, rode antes
-`horizon-launcher settings native-profile dev` (o jogo fica mais lento; volte com `performance`).
+O launcher baixa o Rust dele e o SDK do Horizon que o mod fixa (`[native] horizon` no
+`horizon-mod.toml`, o Nightly de 22/11/2026); não precisa ter Rust instalado nem compilar o
+Horizon. Como o mod usa só a API, ele também compila nos Nightlies mais novos enquanto o que ele
+usa não mudar (o launcher confere isso pelo `uses.json` do pacote).
 
-`--trust-native-code` declara que você confia no código: um mod nativo roda com os seus
-direitos no computador, sem sandbox. O código está em `api/src/` e os shaders em `api/data/`.
+`--trust-native-code` declara que você confia no código: um mod nativo roda com os seus direitos
+no computador, sem sandbox. O código está em `src/` e os shaders em
+`assets/sukuna/shaders/pipeline/`.
 
-## Se a compilação falhar
+## O que mudou no desenho com a API nova
 
-O mod fixa o Nightly em que foi escrito e checado, o de 13/11/2026 (`[compatibility]` no
-`horizon-mixin.toml`), e o launcher compila nele seja qual for o Nightly que a sua instância
-joga. Isso é preciso com o launcher 0.2.69: os Nightlies mais novos (o de 22/11, por exemplo)
-mudaram as pastas do código do Horizon, e o 0.2.69 não consegue montá-los ("failed to read
-... crates\horizon-mods\Cargo.toml").
+A API não dá acesso à imagem do mundo, então o mod principal desenha os efeitos com os pipelines
+dela: brilhos, esferas, ondas e explosões em quadriláteros com shaders próprios. O que entortava
+a imagem do mundo (a lente do Azul, o vidro do Mugen, as ondulações da aura), o modelo do
+santuário e a Nuke completa do Orbital Laser vão para um pacote visual separado, que fala direto
+com a GPU e só funciona no Nightly exato em que foi feito.
+
+O menu (N) continua no mundo: os painéis ficam em arco na sua frente e a mira escolhe o botão,
+mas o desenho é feito no HUD, com a fonte do jogo.
+
+Ainda sem a API nova: o corpo do jogador posado pelas técnicas em terceira pessoa e os braços em
+primeira pessoa (o jogo desenha o jogador normal), a câmera que inclina no pouso da teia (só
+desce) e as feridas desenhadas nos mobs.
 
 ## O que cada arquivo faz
 
-- `horizon-mixin.toml`: identidade do mod.
-- `api/src/lib.rs`: teclas, o desenho dos traços, o voo dos cortes, dano e terreno.
-- `api/src/gfx.rs`: monta os retângulos de cada quadro e o passe de desenho (wgpu).
-- `api/src/cleave.rs`: o Cleave: agarrar, segurar e retalhar.
-- `api/src/whirl.rs`: o redemoinho do Cleave (G olhando para cima).
-- `api/src/combat.rs`: o soco, o combo, a defesa e os aparos.
-- `api/src/vows.rs`: os pactos vinculativos.
-- `api/src/shop.rs`: a loja: os itens, os preços e os pontos de cada Portão.
-- `api/src/power.rs`: a barra de energia e o desenho dela no HUD.
-- `api/src/fuga.rs`: a flecha de fogo: carga, voo, explosão e cratera.
-- `api/src/flame.rs`, `api/data/flame.wgsl`: o desenho da flecha de fogo e a formação dela
-  enquanto carrega.
-- `api/src/rig.rs`: o corpo do jogador montado em código, com cotovelos e joelhos, e a
+- `horizon-mod.toml`: identidade do mod e o Nightly que ele fixa.
+- `src/api.rs`, `src/bridge.rs`: a camada de tradução para a API nova do Horizon.
+- `src/hud.rs`: o menu projetado no HUD.
+- `src/lib.rs`: teclas, o desenho dos traços, o voo dos cortes, dano e terreno.
+- `src/gfx.rs`: monta os quadriláteros de cada quadro para os pipelines (`assets/sukuna/shaders/pipeline/`).
+- `src/cleave.rs`: o Cleave: agarrar, segurar e retalhar.
+- `src/whirl.rs`: o redemoinho do Cleave (G olhando para cima).
+- `src/combat.rs`: o soco, o combo, a defesa e os aparos.
+- `src/vows.rs`: os pactos vinculativos.
+- `src/shop.rs`: a loja: os itens, os preços e os pontos de cada Portão.
+- `src/power.rs`: a barra de energia e o desenho dela no HUD.
+- `src/fuga.rs`: a flecha de fogo: carga, voo, explosão e cratera.
+- `src/flame.rs`: a flecha de fogo no arco e em voo, como o desenho a lê.
+- `src/rig.rs`: o corpo do jogador montado em código, com cotovelos e joelhos, e a
   cinemática inversa que dobra cada membro até a mão ou o pé chegar onde a pose quer.
-- `api/src/anim.rs`: as poses de cada técnica e como elas entram e saem.
-- `api/src/limbs.rs`: o corpo no jogo: o desenho em terceira pessoa, os braços em primeira,
-  a mão do jogo escondida e a câmera do pouso.
-- `api/src/floor.rs`: o piso do domínio fechado: guarda o chão, põe o piso e devolve o chão.
-- `api/src/aura.rs`: a aura de energia (desenhada pelo passe do `gojo.wgsl`, como uma casca em volta do corpo).
-- `api/src/progress.rs`: nível, XP, status e o que cada um vale; gastos e recargas.
-- `api/src/rpg.rs`: a energia, a experiência por abate, os atributos, o pulo e as barras.
-- `api/src/menu.rs`: o que cada painel do menu mostra (status, config, árvore, Portões,
+- `src/anim.rs`: as poses de cada técnica e como elas entram e saem.
+- `src/limbs.rs`: o corpo no jogo: as poses e a câmera do pouso (o desenho do corpo ainda
+  não tem caminho na API nova).
+- `src/floor.rs`: o piso do domínio fechado: guarda o chão, põe o piso e devolve o chão.
+- `src/aura.rs`: a aura de energia em volta do corpo.
+- `src/progress.rs`: nível, XP, status e o que cada um vale; gastos e recargas.
+- `src/rpg.rs`: a energia, a experiência por abate, os atributos, o pulo e as barras.
+- `src/menu.rs`: o que cada painel do menu mostra (status, config, árvore, Portões,
   loja) e os cliques.
-- `api/src/holo.rs`, `api/data/holo.wgsl`: os painéis holográficos: onde ficam no mundo, o
-  raio da mira, as formas (retângulos, anéis, linhas, curvas, letras) e o passe de desenho.
-- `api/data/font.bin`: a fonte Inter SemiBold como atlas de campo de distância (OFL-1.1,
-  ver NOTICE).
-- `api/data/nuke.wgsl` tem também o modo otimizado do Orbital Laser (fumaça em meio
-  tamanho), usado com os efeitos em REDUZIDOS.
-- `api/src/gates.rs`: os Portões: a lista, a barreira, as ondas e as recompensas.
-- `api/src/domain.rs`: a expansão de domínio: concentração, barreira, cortes e terreno.
-- `api/data/domain.wgsl`: o shader da barreira e do domínio aberto (e da barreira amarela
-  dos Portões).
-- `api/src/shrine.rs`, `api/data/shrine.wgsl`: o santuário, desenhado como malha.
-- `api/data/shrine.bin`: o modelo do santuário, já convertido (malha e texturas).
-- `api/src/wounds.rs`: as feridas, guardadas no referencial do corpo de cada mob.
-- `api/data/slash.wgsl`: o shader do brilho e do rastro.
-- `api/data/wound.wgsl`: o shader das feridas (pele, músculo, osso e sangue).
-- `api/src/nuke.rs`: o quadro e a tabela que o shader da Nuke lê (relevo, vento, destroços).
-- `api/data/nuke.wgsl`: o shader da Nuke do Orbital Laser, com uma linha mudada.
-- `api/data/blast.wgsl`: o shader antigo da explosão, usado quando o da Nuke não pode.
+- `src/holo.rs`: os painéis holográficos: onde ficam no mundo, o raio da mira e as formas
+  (retângulos, anéis, linhas, curvas, textos).
+- `src/font_metrics.rs`: as medidas das letras da Inter SemiBold, para o menu medir e
+  alinhar os textos (OFL-1.1, ver NOTICE).
+- `src/gates.rs`: os Portões: a lista, a barreira, as ondas e as recompensas.
+- `src/domain.rs`: a expansão de domínio: concentração, barreira, cortes e terreno.
+- `src/shrine.rs`: o tamanho do santuário no chão.
+- `src/wounds.rs`: as feridas, guardadas no referencial do corpo de cada mob.
+- `src/nuke.rs`: o alcance e a tabela da Nuke do Orbital Laser (o relevo em volta).
+- `assets/sukuna/shaders/pipeline/`: os shaders dos pipelines (`glow`, `orb`, `smoke`).
 - `NOTICE`: o crédito e a licença do Orbital Laser.
-- `api/src/played.rs`: testes que jogam o mod contra um jogo de mentira.
-- `api/src/preview.rs`: só nos testes: as poses desenhadas com uma pele de teste, e a flecha
-  de fogo por cima, para ver as animações sem abrir o jogo.
-- `api/src/math.rs`: vetores e o teste de corte contra a caixa de um mob.
-- `api/src/gojo.rs`: o Azul e o Azul V1: as fases no relógio, a mola, o gasto, o puxão e os
+- `src/played.rs`: testes que jogam o mod contra um jogo de mentira.
+- `src/math.rs`: vetores e o teste de corte contra a caixa de um mob.
+- `src/gojo.rs`: o Azul e o Azul V1: as fases no relógio, a mola, o gasto, o puxão e os
   blocos arrancados no servidor.
-- `api/src/red.rs`: o Vermelho e o Vermelho V1: a carga, o voo, a explosão, o empurrão e a
+- `src/red.rs`: o Vermelho e o Vermelho V1: a carga, o voo, a explosão, o empurrão e a
   cratera no servidor (as explosões do Roxo também passam por aqui).
-- `api/src/purple.rs`: o Roxo, o Roxo V1 e o Roxo 200%: o gesto, a carga e a barra, o voo,
+- `src/purple.rs`: o Roxo, o Roxo V1 e o Roxo 200%: o gesto, a carga e a barra, o voo,
   a cena, a fusão e o caminho apagado no servidor.
-- `api/src/mugen.rs`: o Mugen: ligar, o gasto, as dobras, o freio no servidor e os golpes que
+- `src/mugen.rs`: o Mugen: ligar, o gasto, as dobras, o freio no servidor e os golpes que
   não chegam.
-- `api/src/void.rs`: o Vazio Ilimitado: a concentração, o tempo e o gasto, as ondulações e a
+- `src/void.rs`: o Vazio Ilimitado: a concentração, o tempo e o gasto, as ondulações e a
   paralisia no servidor (o piso e o sumiço dos blocos são o `floor.rs`).
-- `api/src/sphere.rs`, `api/data/gojo.wgsl`: o passe das esferas do Gojo, com a lente do
-  buraco negro do Orbital Laser (ver NOTICE).
+- `src/sphere.rs`: as esferas do Gojo como o desenho as lê.

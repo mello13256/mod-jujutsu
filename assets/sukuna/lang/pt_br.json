@@ -1,0 +1,15 @@
+{
+  "key.categories.sukuna": "Jujutsu Horizon",
+  "key.sukuna.draw": "Desmantelar (Sukuna) · Azul (Gojo)",
+  "key.sukuna.cleave": "Cleave (Sukuna) · Mugen (Gojo)",
+  "key.sukuna.fuga": "Flecha de fogo (Sukuna) · Vermelho (Gojo)",
+  "key.sukuna.reverse": "Técnica reversa: segurar cura; dois toques, automático",
+  "key.sukuna.menu": "Menu do sistema: status e pontos",
+  "key.sukuna.domain": "Expansão de domínio: Santuário (Sukuna) · Vazio Ilimitado (Gojo)",
+  "key.sukuna.power": "Energia: encher a barra (com Shift, esvaziar)",
+  "sukuna.settings.terrain": "Destruição de blocos",
+  "sukuna.settings.effects": "Efeitos da explosão",
+  "sukuna.settings.effects.full": "Completos",
+  "sukuna.settings.effects.reduced": "Reduzidos",
+  "sukuna.settings.effects.off": "Desligados"
+}

@@ -1,27 +1,30 @@
 Sukuna (mod for Horizon)
 
-The fire arrow's explosion is drawn by the Nuke post pass of Orbital Laser
-(https://github.com/Stink-O/orbital-laser): api/data/nuke.wgsl is that mod's shader
-(native/engine-shim/mod_post.wgsl, mod/shaders/strike.wgsl and mod/shaders/nuke.wgsl, with
-one line changed, marked there), and api/src/nuke.rs follows its mod/src/strike/nuke.rs for
-the data table the shader reads.
+The fire arrow's explosion follows the Nuke of Orbital Laser
+(https://github.com/Stink-O/orbital-laser): src/nuke.rs follows its mod/src/strike/nuke.rs for
+the data table its shader reads. The shader itself (native/engine-shim/mod_post.wgsl,
+mod/shaders/strike.wgsl and mod/shaders/nuke.wgsl, with one line changed) travels with the
+separate visual pack, not with this package.
 
-Gojo's spheres (api/data/gojo.wgsl) bend the light with the black hole lens of the same
+In the visual pack, Gojo's spheres (gojo.wgsl) bend the light with the black hole lens of the same
 mod: its `bh_lens` function (mod/shaders/strike.wgsl), changed so the pull has a sign and a
 strength, the event horizon is the sphere's own body and there is no disk or jet, and its
 noise functions (pcg, fh31, fvnoise3, ffbm3) as they are. Orbital Laser itself is not changed.
 
-The shrine of the domain expansion (api/data/shrine.bin) is the model
+The shrine of the domain expansion (shrine.bin, in the visual pack; this package keeps only
+its measured size in src/shrine.rs) is the model
 "Malevolent Shrine | Jujutsu Kaisen" by NexusB (https://sketchfab.com/NexusB),
 https://sketchfab.com/3d-models/malevolent-shrine-jujutsu-kaisen-efcf94d9cf03434db7b0978144b500b6
 licensed under CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/).
 Changes: converted from GLB to a raw mesh, its parts merged, scaled to a height of 1, its
 base-colour and emissive textures reduced to 512 or 1024 pixels; the other textures left out.
 
-The text of the menu (api/data/font.bin) is drawn with Inter SemiBold
+The menu lays its text out with the metrics of Inter SemiBold (src/font_metrics.rs; the
+visual pack's font.bin atlas draws it)
 (https://github.com/rsms/inter), Copyright 2016-2023 The Inter Project Authors, licensed
 under the SIL Open Font License, Version 1.1 (below). Changes: the printable ASCII characters
-and the Portuguese accented letters baked into a signed-distance atlas.
+and the Portuguese accented letters baked into a signed-distance atlas, and their metrics
+written out as a table.
 
 Orbital Laser
 Copyright (c) 2026 Stink-O

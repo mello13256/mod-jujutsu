@@ -1,5 +1,14 @@
 # Novidades do Jujutsu Horizon
 
+## 0.31.0 — 2026-11-24
+
+- **Formato novo do Horizon.** O mod agora usa a API de mods do Horizon (o `horizon-mod.toml` na raiz) e compila com o launcher do Horizon 0.2.108 ou mais novo, contra o SDK pronto do Nightly de 22/11: ninguém precisa mais do launcher 0.2.69 nem de compilar o código do Horizon. Instale por **Mods > Adicionar do GitHub** no launcher do Horizon (veja "Como instalar" no README). O Jujutsu Launcher 2.1 não lê esse formato: a versão nova dele vem em seguida.
+- Como o mod usa só a API, ele continua compilando nos Nightlies mais novos enquanto o que ele usa não mudar.
+- **Desenho refeito com a API:** os traços, os cortes, a flecha de fogo, as esferas do Gojo, as ondas, o Black Flash, a aura e as explosões são desenhados pelos shaders do próprio mod. Os efeitos que entortavam a imagem do mundo (a lente do Azul, o vidro do Mugen), o modelo do santuário e a Nuke completa vão para um pacote visual separado, que vem depois.
+- **Menu (N):** os painéis continuam no mundo e a mira escolhe o botão; o desenho é feito no HUD, com a fonte do jogo.
+- **Teclas** agora ficam em **Opções > Controles** (grupo Jujutsu Horizon), e as opções (destruição de blocos, efeitos da explosão) em **Opções > Mods > Jujutsu Horizon > Config**, além do painel CONFIG do menu.
+- **Ainda não voltou:** o corpo posado pelas técnicas e os braços em primeira pessoa (o jogo desenha o jogador normal), as feridas desenhadas nos mobs e a inclinação da câmera no pouso da teia. A jogabilidade é a mesma.
+
 ## 0.30.3 — 2026-11-23
 
 - **Compila em quem instalou um Horizon mais novo.** Os Nightlies mais novos (o de 22/11, por exemplo) mudaram as pastas do código do Horizon, e o launcher 0.2.69 não consegue montar o código deles ("failed to read ... crates\horizon-mods\Cargo.toml"). O mod agora fixa o Nightly em que foi feito (13/11, 9f42064), e o launcher compila nele seja qual for o Nightly instalado.
