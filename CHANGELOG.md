@@ -2,7 +2,7 @@
 
 ## 0.31.0 — 2026-11-24
 
-- **Formato novo do Horizon.** O mod agora usa a API de mods do Horizon (o `horizon-mod.toml` na raiz) e compila com o launcher do Horizon 0.2.108 ou mais novo, contra o SDK pronto do Nightly de 22/11: ninguém precisa mais do launcher 0.2.69 nem de compilar o código do Horizon. Instale por **Mods > Adicionar do GitHub** no launcher do Horizon (veja "Como instalar" no README). O Jujutsu Launcher 2.1 não lê esse formato: a versão nova dele vem em seguida.
+- **Formato novo do Horizon.** O mod agora usa a API de mods do Horizon (o `horizon-mod.toml` na raiz) e compila com o launcher do Horizon 0.2.108 ou mais novo, contra o SDK pronto do Nightly de 22/11: ninguém precisa mais do launcher 0.2.69 nem de compilar o código do Horizon. **Baixe o Jujutsu Launcher 3.0** em https://mello13256.github.io/mod-jujutsu/ : o 2.1 não instala esta versão (ele usa o Horizon 0.2.69). Quem não usa o Jujutsu Launcher instala por **Mods > Adicionar do GitHub** no launcher do Horizon (veja "Como instalar" no README).
 - Como o mod usa só a API, ele continua compilando nos Nightlies mais novos enquanto o que ele usa não mudar.
 - **Desenho refeito com a API:** os traços, os cortes, a flecha de fogo, as esferas do Gojo, as ondas, o Black Flash, a aura e as explosões são desenhados pelos shaders do próprio mod. Os efeitos que entortavam a imagem do mundo (a lente do Azul, o vidro do Mugen), o modelo do santuário e a Nuke completa vão para um pacote visual separado, que vem depois.
 - **Menu (N):** os painéis continuam no mundo e a mira escolhe o botão; o desenho é feito no HUD, com a fonte do jogo.

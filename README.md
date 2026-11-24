@@ -749,6 +749,10 @@ valor que uma versão antiga tenha gravado é ignorado.
 
 ## Como instalar
 
+O jeito simples: baixe o **Jujutsu Launcher** em https://mello13256.github.io/mod-jujutsu/ e clique em JOGAR. Ele baixa o launcher do Horizon 0.2.108, o Horizon, o Java e o Rust do Horizon, instala o mod do GitHub, compila e abre o jogo.
+
+Sem o Jujutsu Launcher:
+
 Desde a 0.31.0 o mod usa a API de mods do Horizon (o formato novo, com o `horizon-mod.toml` na
 raiz). Precisa do **launcher do Horizon 0.2.108 ou mais novo**; o 0.2.69 não lê esse formato.
 
