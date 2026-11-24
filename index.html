@@ -151,8 +151,8 @@
         BAIXAR O LAUNCHER
       </a>
       <div class="meta">
-        Jujutsu Launcher 2.1.0 · Windows 10/11 (64 bits) · 4,3 MB<br>
-        SHA-256: <code>5143d0a5fdb6997cb9d87354d0de0377f6c10476d2fbec992bbddb85592c258d</code>
+        Jujutsu Launcher 3.0.0 · mod 0.31.0 · Windows 10/11 (64 bits) · 4,2 MB<br>
+        SHA-256: <code>ff12b4e030de453f61c7b63455f22e2eaf2756aa316cff2862b5044bbf686934</code>
       </div>
     </div>
     <div class="shot"><img src="img/launcher.webp" width="1120" height="700" alt="A tela inicial do Jujutsu Launcher, com o botão Jogar e os cartões de conta, Minecraft, mod e dependências"></div>
@@ -175,8 +175,9 @@
     <div class="grid g3">
       <div class="card step"><div class="num">1</div><div><h3>Baixe e abra</h3><p>Baixe o <b>jujutsu-launcher.exe</b> e abra. Não precisa instalar nada antes.</p></div></div>
       <div class="card step"><div class="num">2</div><div><h3>Entre com a conta</h3><p>Uma vez só, com a conta Microsoft que tem o Minecraft: Java Edition. Depois disso, o jogo abre mesmo sem internet.</p></div></div>
-      <div class="card step"><div class="num">3</div><div><h3>Jogar</h3><p>O launcher baixa o que falta (o Horizon 0.2.69, o Java, o Rust e o próprio mod), prepara a 26.3, compila e abre o jogo.</p></div></div>
+      <div class="card step"><div class="num">3</div><div><h3>Jogar</h3><p>O launcher baixa o que falta (o launcher oficial do Horizon 0.2.108, o Horizon Nightly, o Java, o Rust e o próprio mod), prepara a 26.3, compila e abre o jogo.</p></div></div>
     </div>
+    <div class="note"><b>Baixou o launcher antes de 24/11/2026?</b> Baixe de novo. A versão 2.1 instalava o Horizon 0.2.69, que não compila o mod atual (0.31.0 em diante). A 3.0 troca sozinha o Horizon antigo pelo novo.</div>
     <div class="note"><b>O Windows pode avisar "O Windows protegeu o computador".</b> O launcher ainda não tem assinatura digital, então o SmartScreen não o conhece. Clique em <b>Mais informações</b> e depois em <b>Executar assim mesmo</b>. Se quiser conferir o arquivo, o SHA-256 dele está acima (no PowerShell: <code>Get-FileHash .\jujutsu-launcher.exe</code>).</div>
   </section>
 
@@ -192,7 +193,7 @@
       </div>
       <div class="card">
         <h3>Atualizações</h3>
-        <p>O launcher confere o mod no GitHub sempre que abre. Quando sai uma versão nova, o Jogar baixa e compila antes de abrir, guardando uma cópia da anterior. As novidades de cada versão aparecem no próprio launcher.</p>
+        <p>O launcher confere o mod no GitHub sempre que abre. Quando sai uma versão nova, o Jogar pede ao Horizon para atualizar o mod (<code>mods update-github</code>) e compila antes de abrir. As novidades de cada versão aparecem no próprio launcher.</p>
         <p style="margin-top:12px">Só singleplayer por enquanto.</p>
       </div>
     </div>
