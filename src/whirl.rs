@@ -11,7 +11,7 @@ use crate::cleave::{Nick, pick_cut, random};
 use crate::domain::{CUT_TICKS, Cut};
 use crate::math::{V3, add, len, mul, norm, sub};
 use crate::progress::Ability;
-use crate::wounds::{self, Wound};
+use crate::body;
 use crate::{Hit, Mod, eye_of, others, pose};
 
 /// Olhando mais para cima do que isto (graus de inclinação; negativo é para cima), a tecla do
@@ -135,7 +135,7 @@ impl Mod {
         inside.sort_by(|a, b| len(sub(middle(a), center)).total_cmp(&len(sub(middle(b), center))));
         let bodies: Vec<_> = inside
             .iter()
-            .take(wounds::MAX_WOUNDED)
+            .take(body::MAX_BODIES)
             .map(|e| {
                 let (origin, yaw) = pose(&*host, e.id).unwrap_or((e.position, e.yaw));
                 (e.id, origin, yaw, e.bounds[1][1] - e.bounds[0][1], (e.bounds[1][0] - e.bounds[0][0]) * 0.5)
@@ -143,7 +143,6 @@ impl Mod {
             .collect();
 
         let mut s = self.state.lock().unwrap();
-        let now = s.started.elapsed().as_secs_f32();
         let mut rng = s.rng;
         let Some(whirl) = s.whirl.as_mut() else {
             return;
@@ -165,20 +164,16 @@ impl Mod {
                 .collect();
             s.hits.extend(hits);
         }
-        // Um corte pequeno por tick num dos corpos dentro, cada vez mais fundo.
+        // Um risco por tick num dos corpos dentro.
         if !bodies.is_empty() {
-            let depth = (1 + ticks / 25).min(3) as u8;
-            let (id, origin, yaw, height, half_width) =
+            let (_, origin, yaw, height, half_width) =
                 bodies[(random(&mut rng) * bodies.len() as f64) as usize % bodies.len()];
             let angle = random(&mut rng) * std::f64::consts::TAU;
             let into = [angle.cos(), 0.0, angle.sin()];
             let (point, along, half) = pick_cut(&mut rng, height, half_width, into);
             let seed = random(&mut rng) as f32;
-            if let Some(wound) = Wound::nick(point, along, into, half * 1.3, now, seed, depth) {
-                s.wounds.add(id, wound, origin, yaw, hurting);
-            }
             let lift = mul(into, -(half_width + 0.22));
-            let end = |sign: f64| add(wounds::from_body(add(point, mul(along, sign * half * 2.2)), origin, yaw), lift);
+            let end = |sign: f64| add(body::from_body(add(point, mul(along, sign * half * 2.2)), origin, yaw), lift);
             s.nicks.push(Nick { a: end(-1.0), b: end(1.0), age: 0, seed });
         }
         // Os riscos no ar: mais numa esfera maior.

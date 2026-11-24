@@ -14,7 +14,7 @@ use crate::api::{Host, Text};
 
 use crate::progress::Ability;
 use crate::math::{self, V3, add, cross, dot, len, mul, norm, sub};
-use crate::wounds::{self, Wound};
+use crate::body;
 use crate::{Hit, Mod, State, eye_of, others, pose};
 
 /// O corte de teia: até onde a mira alcança o chão, quanto segurar a tecla, o raio sem
@@ -84,12 +84,6 @@ pub(crate) fn random(state: &mut u64) -> f64 {
 /// De quantos em quantos ticks sai um corte, para a energia `level` da barra.
 fn cut_every(level: f32) -> u32 {
     (CUT_EVERY as f32 - 2.0 * level.clamp(0.0, 1.0)).round().max(1.0) as u32
-}
-
-/// Quão fundo é o corte de número `cuts`: sem energia, de arranhão a osso em uma dúzia de
-/// cortes; com a barra cheia, em três.
-fn cut_depth(cuts: u32, level: f32) -> u8 {
-    ((cuts as f32 * (1.0 + 3.0 * level.clamp(0.0, 1.0)) / 4.0) as u32).min(3) as u8
 }
 
 /// O dano de cada golpe: um terço do dano de um corte, e quatro vezes isso com a barra cheia.
@@ -395,14 +389,13 @@ impl Mod {
 
         let mut sound = None;
         let mut s = self.state.lock().unwrap();
-        let now = s.started.elapsed().as_secs_f32();
         let mut rng = s.rng;
         let Some(held) = s.grab.as_mut().filter(|held| held.id == grab.id) else {
             return;
         };
         held.target = hold_point(eye, look, held.height);
         held.ticks += 1;
-        let (ticks, cuts) = (held.ticks, held.cuts);
+        let ticks = held.ticks;
         // Com a barra cheia, um corte por tick em vez de um a cada três.
         let every = cut_every(level);
         let cutting = every == 1 || ticks % every == 1;
@@ -413,19 +406,14 @@ impl Mod {
 
         if let Some((origin, yaw)) = body {
             if cutting {
-                let into = wounds::turn(look, yaw);
+                let into = body::turn(look, yaw);
                 let (point, along, half) = pick_cut(&mut rng, grab.height, grab.half_width, into);
-                // Cada vez mais fundo: de arranhão a osso em uma dúzia de cortes.
-                let depth = cut_depth(cuts, level);
                 let seed = random(&mut rng) as f32;
-                if let Some(wound) = Wound::nick(point, along, into, half, now, seed, depth) {
-                    s.wounds.add(grab.id, wound, origin, yaw, hurting);
-                }
                 // O risco no ar, na frente do corpo, do lado de quem corta.
                 let lift = mul(look, -(grab.half_width + 0.22));
                 let end = |sign: f64| {
                     let at = add(point, mul(along, sign * half * 1.7));
-                    add(wounds::from_body(at, origin, yaw), lift)
+                    add(body::from_body(at, origin, yaw), lift)
                 };
                 s.nicks.push(Nick {
                     a: end(-1.0),
@@ -486,7 +474,6 @@ impl State {
     pub(crate) fn enter(&mut self, dimension: &str) {
         if self.dimension != dimension {
             self.slashes.clear();
-            self.wounds.clear();
             self.hits.clear();
             self.cells.clear();
             self.nicks.clear();
@@ -537,8 +524,6 @@ mod tests {
     #[test]
     fn the_bar_makes_cleave_faster_deeper_and_harder() {
         assert_eq!((cut_every(0.0), cut_every(0.5), cut_every(1.0)), (3, 2, 1));
-        assert_eq!((cut_depth(4, 0.0), cut_depth(12, 0.0)), (1, 3));
-        assert_eq!((cut_depth(1, 1.0), cut_depth(3, 1.0)), (1, 3));
         assert_eq!((hurt(14, 0.0), hurt(14, 1.0), hurt(1, 0.0)), (4, 16, 2));
     }
 

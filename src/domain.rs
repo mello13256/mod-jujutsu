@@ -19,7 +19,7 @@ use crate::api::{
 use crate::cleave::{Nick, pick_cut, random};
 use crate::progress::Ability;
 use crate::math::{self, V3, add, dot, len, mul, norm, sub};
-use crate::wounds::{self, Wound};
+use crate::body;
 use crate::{Hit, Mod, State, eye_of, others, pose};
 
 pub const KEY: &str = "domain";
@@ -598,7 +598,7 @@ impl Mod {
         // As poses dos mais próximos, para as feridas ficarem no corpo.
         let bodies: Vec<_> = inside
             .iter()
-            .take(wounds::MAX_WOUNDED)
+            .take(body::MAX_BODIES)
             .map(|e| {
                 let (origin, yaw) = pose(&*host, e.id).unwrap_or((e.position, e.yaw));
                 let height = e.bounds[1][1] - e.bounds[0][1];
@@ -609,7 +609,6 @@ impl Mod {
 
         let mut s = self.state.lock().unwrap();
         let settings = s.settings(&*host);
-        let now = s.started.elapsed().as_secs_f32();
         let mut rng = s.rng;
         let Some(domain) = s.domain.as_mut() else {
             return;
@@ -639,25 +638,21 @@ impl Mod {
             // E o que a lista de mobs não traz (o dragão e os cristais do End).
             s.area_hits.push((center, radius, amount));
         }
-        // Dois cortes pequenos por tick nos corpos mais próximos, cada vez mais fundos.
-        let depth = (1 + ticks / 60).min(3) as u8;
+        // Dois riscos por tick nos corpos mais próximos.
         for _ in 0..2 {
             if bodies.is_empty() {
                 break;
             }
-            let (id, origin, yaw, height, half_width) =
+            let (_, origin, yaw, height, half_width) =
                 bodies[(random(&mut rng) * bodies.len() as f64) as usize % bodies.len()];
             let angle = random(&mut rng) * std::f64::consts::TAU;
             let into = [angle.cos(), 0.0, angle.sin()];
             let (point, along, half) = pick_cut(&mut rng, height, half_width, into);
             let seed = random(&mut rng) as f32;
-            if let Some(wound) = Wound::nick(point, along, into, half * 1.3, now, seed, depth) {
-                s.wounds.add(id, wound, origin, yaw, ticks % HURT_EVERY == 1);
-            }
             let lift = mul(into, -(half_width + 0.22));
             let end = |sign: f64| {
                 let at = add(point, mul(along, sign * half * 2.2));
-                add(wounds::from_body(at, origin, yaw), lift)
+                add(body::from_body(at, origin, yaw), lift)
             };
             s.nicks.push(Nick { a: end(-1.0), b: end(1.0), age: 0, seed });
         }

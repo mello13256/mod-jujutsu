@@ -16,6 +16,7 @@ mod hud;
 pub use bridge::hooks;
 mod anim;
 mod aura;
+mod body;
 mod cleave;
 mod combat;
 mod domain;
@@ -40,11 +41,11 @@ mod rig;
 mod rpg;
 mod shop;
 mod shrine;
+mod skin;
 mod sphere;
 mod void;
 mod vows;
 mod whirl;
-mod wounds;
 #[cfg(test)]
 mod played;
 
@@ -262,8 +263,6 @@ pub(crate) struct State {
     area_hits: Vec<(V3, f64, u32)>,
     pub ghosts: Vec<Ghost>,
     pub slashes: Vec<Slash>,
-    /// As feridas que os cortes deixaram nos mobs.
-    pub wounds: wounds::Wounds,
     /// O mob preso pelo Cleave, os riscos dos cortes pequenos e o mob que acabou de ser largado.
     pub grab: Option<cleave::Grab>,
     /// O redemoinho do Cleave (a tecla apertada olhando para cima).
@@ -368,7 +367,6 @@ impl State {
             area_hits: Vec::new(),
             ghosts: Vec::new(),
             slashes: Vec::new(),
-            wounds: wounds::Wounds::default(),
             grab: None,
             whirl: None,
             combat: combat::Combat::default(),
@@ -671,7 +669,6 @@ impl Mod {
             s.cancel();
             s.slashes.clear();
             s.ghosts.clear();
-            s.wounds.clear();
             s.nicks.clear();
             s.grab = None;
             s.charge = None;
@@ -745,7 +742,6 @@ impl Mod {
         }
         let settings = s.settings(&*host);
         let dimension = s.dimension.clone();
-        let now = s.started.elapsed().as_secs_f32();
         let mut slashes = std::mem::take(&mut s.slashes);
         let shield = s.shield();
         // Sem a trava: `client_entities` é uma chamada ao jogo.
@@ -753,7 +749,6 @@ impl Mod {
 
         let entities = host.client_entities();
         let mut hits = Vec::new();
-        let mut cut = Vec::new();
         let mut cells: HashSet<[i32; 3]> = HashSet::new();
         let mut blocked = Vec::new();
         let mut swept = Vec::new();
@@ -796,17 +791,8 @@ impl Mod {
                     let (a, b) = slash.ends(at);
                     math::segment_meets_box(a, b, lo, hi).then_some((a, b))
                 });
-                if let Some((a, b)) = crossed {
+                if crossed.is_some() {
                     slash.hit.push(entity.id);
-                    // A ferida fica no corpo: onde o mob está e para onde está virado agora.
-                    let (origin, yaw) = pose(&*host, entity.id)
-                        .unwrap_or((entity.position, entity.yaw));
-                    let seed = (slash.seed + entity.id as f32 * 0.137).fract();
-                    if let Some(wound) =
-                        wounds::Wound::cut(slash.eye, a, b, origin, yaw, now, seed)
-                    {
-                        cut.push((entity.id, wound, origin, yaw));
-                    }
                     hits.push(Hit {
                         id: entity.id,
                         at: mul(add(entity.bounds[0], entity.bounds[1]), 0.5),
@@ -848,9 +834,6 @@ impl Mod {
             for (amount, from) in blocked {
                 broke |= s.strike_barrier(amount, from);
             }
-            for (id, wound, origin, yaw) in cut {
-                s.wounds.add(id, wound, origin, yaw, true);
-            }
         }
         let at = s.slashes.first().map(|slash| slash.ends(slash.distance).0);
         let wall = s.domain.as_ref().map(|domain| domain.center);
@@ -861,32 +844,6 @@ impl Mod {
         if struck && let Some(at) = at {
             host.play_local_sound("minecraft:entity.player.attack.crit", at, 1.4, 0.7, 0);
         }
-    }
-
-    /// A cada quadro: onde está cada mob ferido, para as feridas serem desenhadas no corpo.
-    fn follow_the_wounded(&self, host: &dyn Host) {
-        let ids: Vec<u32> = {
-            let s = self.state.lock().unwrap();
-            if s.wounds.is_empty() {
-                return;
-            }
-            s.wounds.mobs.iter().map(|mob| mob.id).collect()
-        };
-        // Sem a trava: são chamadas ao jogo.
-        let poses: Vec<(u32, Option<(V3, f32)>)> =
-            ids.into_iter().map(|id| (id, pose(host, id))).collect();
-        let mut s = self.state.lock().unwrap();
-        let now = s.started.elapsed().as_secs_f32();
-        for (id, pose) in poses {
-            if let Some((origin, yaw)) = pose
-                && let Some(mob) = s.wounds.mobs.iter_mut().find(|mob| mob.id == id)
-            {
-                mob.origin = origin;
-                mob.yaw = yaw;
-                mob.seen = now;
-            }
-        }
-        s.wounds.forget_unseen(now);
     }
 
     /// O tick do servidor do mundo local: roda os comandos de dano que esperavam.
@@ -1421,7 +1378,6 @@ impl Hooks for Mod {
                 0,
             );
         }
-        self.follow_the_wounded(host);
         {
             let mut s = self.state.lock().unwrap();
             let drawn = s.mode && (s.drawing || !s.strokes.is_empty() || !s.current.is_empty());

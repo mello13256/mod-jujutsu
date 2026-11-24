@@ -5,7 +5,7 @@
 use std::time::Instant;
 
 use crate::api::{
-    BlockEntityDraw, CameraPoseEvent, Flow, Host, ModelPart, PlayerSubmitEvent, RenderHandEvent,
+    CameraPoseEvent, Flow, Host, ModelPart, PlayerSubmitEvent, RenderHandEvent,
     WorldSubmitEvent,
 };
 
@@ -229,10 +229,8 @@ impl Mod {
         };
         let skin = profile.map(|p| {
             let pixels = host.client_texture(&p.skin);
-            let slim = slim_skin(
-                &p.skin,
-                pixels.as_ref().map(|t| (t.width, t.height, t.rgba.as_slice())),
-            );
+            let slim = p.slim
+                || slim_skin(&p.skin, pixels.as_ref().map(|t| (t.width, t.height, t.rgba.as_slice())));
             (p.skin.clone(), slim)
         });
         let mut s = self.state.lock().unwrap();
@@ -336,7 +334,7 @@ impl Mod {
         let mut model = whole.clone();
         drop(s);
         rig::apply(&mut model, &pose, slim);
-        let draw: &mut BlockEntityDraw = event.draw;
+        let draw = &mut *event.draw;
         draw.push();
         draw.scale([1.0, -1.0, -1.0]);
         draw.scale([rig::SCALE as f32; 3]);
@@ -384,27 +382,17 @@ impl Mod {
         let mut model = arms.clone();
         drop(s);
         rig::apply(&mut model, &pose, slim);
-        let eye = [
-            picture.position[0].floor() as i32,
-            picture.position[1].floor() as i32,
-            picture.position[2].floor() as i32,
-        ];
-        let (block, sky) = host.light(eye);
+        // O desenho já começa no referencial da câmera (o da mão: +x à direita, +y para cima,
+        // -z para dentro da tela), com a luz dos olhos: é o mesmo referencial a que antes se
+        // chegava girando o mundo como a câmera.
         let draw = &mut *event.draw;
-        let light = draw.light();
-        draw.set_light((u32::from(sky) * 16) | ((u32::from(block) * 16) << 8));
         draw.push();
-        // Do mundo (a partir da câmera) para o referencial da câmera: girar como ela.
-        draw.rotate_about([0.0, 1.0, 0.0], -picture.yaw, [0.0; 3]);
-        draw.rotate_about([1.0, 0.0, 0.0], picture.pitch, [0.0; 3]);
-        draw.rotate_about([0.0, 1.0, 0.0], 180.0, [0.0; 3]);
         let neck = anim::FIRST_PERSON_NECK;
         draw.translate([neck[0] as f32, neck[1] as f32, neck[2] as f32]);
         let k = (rig::SCALE * anim::FIRST_PERSON_SCALE) as f32;
         draw.scale([-k, -k, k]);
         let drawn = host.draw_model_part(draw, &model, &skin, 0xFF_FF_FF);
         draw.pop();
-        draw.set_light(light);
         if !drawn {
             self.state.lock().unwrap().body.failed = true;
         }

@@ -324,11 +324,13 @@ impl mod_api::Hooks for Jujutsu {
 
     fn camera_pose(&self, host: &dyn ClientHost, event: &mut mod_api::CameraPoseEvent<'_>) {
         let gui = self.gui();
-        // A API nova deixa mudar só a posição da câmera: a inclinação fica a do jogador.
         let (mut yaw, mut pitch) = (event.yaw, event.pitch);
         let mut old_event =
             old::CameraPoseEvent { partial: event.partial, position: event.position, yaw: &mut yaw, pitch: &mut pitch };
         self.the.camera_pose(&Client::shared(host, gui), &mut old_event);
+        // O jogo lê de volta a direção também (a câmera que olha para o chão no pouso da teia).
+        event.yaw = yaw;
+        event.pitch = pitch;
     }
 
     fn camera_distance(&self, host: &dyn ClientHost, event: &mut mod_api::CameraDistanceEvent<'_>) {
@@ -336,6 +338,44 @@ impl mod_api::Hooks for Jujutsu {
         let mut distance = event.distance;
         self.the.camera_distance(&Client::shared(host, gui), &mut old::CameraDistanceEvent { distance: &mut distance });
         event.distance = distance;
+    }
+
+    fn render_player_pre(&self, host: &dyn ClientHost, event: &mut mod_api::RenderPlayerPreEvent<'_>) -> Flow {
+        let gui = self.gui();
+        let render = event.player;
+        let mut old_event = old::PlayerSubmitEvent {
+            who: old::PlayerWho { name: event.who.name, local: event.who.local },
+            player: old::PlayerPose {
+                partial: render.partial,
+                age: render.age,
+                body_yaw: render.body_yaw,
+                head_yaw: render.head_yaw,
+                pitch: render.pitch,
+                walk_position: render.walk_position,
+                walk_speed: render.walk_speed,
+            },
+            draw: &mut *event.draw,
+        };
+        self.the.player_submit(&Client::shared(host, gui), &mut old_event)
+    }
+
+    fn render_hand(&self, host: &dyn ClientHost, event: &mut mod_api::RenderHandEvent<'_, '_>) -> Flow {
+        let gui = self.gui();
+        let client = Client::shared(host, gui);
+        let hand = event.render.hand;
+        // Os braços do mod uma vez por quadro, na vez da mão principal; as duas mãos do jogo
+        // somem enquanto eles aparecem.
+        if hand == mod_api::Hand::Main {
+            self.the.world_submit(&client, &mut old::WorldSubmitEvent { draw: &mut *event.draw });
+        }
+        let mut old_event = old::RenderHandEvent {
+            hand,
+            item: None,
+            partial: event.render.partial,
+            pitch: event.render.interpolated_pitch,
+            swing: event.render.swing,
+        };
+        self.the.render_hand(&client, &mut old_event)
     }
 
     fn entity_outline(&self, host: &dyn ClientHost, event: &mut mod_api::EntityOutlineEvent<'_>) {
@@ -369,6 +409,7 @@ impl mod_api::Hooks for Jujutsu {
             return;
         }
         let mut server = Server { host };
+        server.skin();
         let told = std::mem::take(&mut *TOLD.lock().unwrap_or_else(|e| e.into_inner()));
         if let Some(last) = told.into_iter().last() {
             old::Host::client_action_bar(&mut server, last, false);
@@ -806,8 +847,26 @@ impl old::Host for Client<'_> {
         (read(mod_api::LightLayer::Block), read(mod_api::LightLayer::Sky))
     }
 
-    fn draw_model_part(&self, draw: &mut old::BlockEntityDraw, part: &old::ModelPart, texture: &str, tint: u32) -> bool {
-        draw.model_part(part, texture, tint)
+    fn client_profiles(&mut self) -> Vec<old::NativeClientProfile> {
+        let skin = SKIN.lock().unwrap_or_else(|e| e.into_inner());
+        skin.iter()
+            .map(|(uuid, name, skin)| old::NativeClientProfile {
+                uuid: *uuid,
+                name: name.clone(),
+                skin: skin.sprite.clone(),
+                slim: skin.slim,
+            })
+            .collect()
+    }
+
+    fn draw_model_part(&self, draw: &mut (dyn mod_api::BlockEntityDrawContext + '_), part: &old::ModelPart, texture: &str, tint: u32) -> bool {
+        if draw.model_part(part, texture, tint) {
+            return true;
+        }
+        // A pele baixada ainda não está no atlas: a padrão do jogador, depois a do Steve.
+        let fallback = SKIN.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, skin)| skin.fallback);
+        fallback.is_some_and(|f| f != texture && draw.model_part(part, f, tint))
+            || draw.model_part(part, "entity/player/wide/steve", tint)
     }
 
     fn text_width(&self, text: &str) -> f32 {
@@ -849,6 +908,9 @@ fn write_data(host: &dyn mod_api::Host, name: &str, value: &str) {
 
 // O servidor.
 
+/// A pele de quem joga, como o servidor a tira do perfil: o UUID, o nome e a pele.
+static SKIN: Mutex<Option<(u128, String, crate::skin::Skin)>> = Mutex::new(None);
+
 /// As mensagens da barra de ação que a janela pediu e o servidor ainda não mandou.
 static TOLD: Mutex<Vec<Text>> = Mutex::new(Vec::new());
 
@@ -869,6 +931,27 @@ pub struct Server<'a> {
 impl Server<'_> {
     fn base(&self) -> &dyn mod_api::Host {
         &*self.host
+    }
+
+    /// A pele de quem joga, a cada poucos segundos (ela pode mudar, e o perfil pode chegar depois).
+    fn skin(&mut self) {
+        static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+        {
+            let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+            if last.is_some_and(|at| at.elapsed().as_secs_f32() < 3.0) {
+                return;
+            }
+            *last = Some(std::time::Instant::now());
+        }
+        let Some(player) = self.player() else {
+            return;
+        };
+        let Some(profile) = player.profile(self.base()) else {
+            return;
+        };
+        let textures = profile.properties.iter().find(|p| p.name == "textures").map(|p| p.value.as_str());
+        let skin = crate::skin::of(profile.uuid, textures);
+        *SKIN.lock().unwrap_or_else(|e| e.into_inner()) = Some((profile.uuid, profile.name, skin));
     }
 
     fn entity_of(&self, id: u32) -> Option<mod_api::EntityRef> {

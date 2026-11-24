@@ -140,6 +140,8 @@ pub struct NativeClientProfile {
     pub uuid: u128,
     pub name: String,
     pub skin: String,
+    /// O modelo fino, quando o perfil diz.
+    pub slim: bool,
 }
 
 /// Os pixels de uma textura, RGBA de 8 bits por canal.
@@ -266,9 +268,6 @@ pub enum HudOp {
     Fill { rect: [f32; 4], argb: u32 },
     Text { text: String, at: [f32; 2], rgb: u32, shadow: bool },
 }
-
-/// O desenho de um modelo neste quadro (o corpo e os braços das animações).
-pub type BlockEntityDraw = dyn mod_api::BlockEntityDrawContext;
 
 /// O jogo como o mod o vê. Cada método responde o que a API nova deixa ver do lado em que o gancho
 /// roda; o que não existe daquele lado responde vazio.
@@ -454,7 +453,7 @@ pub trait Host {
     fn light(&self, at: [i32; 3]) -> (u8, u8) {
         (0, 15)
     }
-    fn draw_model_part(&self, draw: &mut BlockEntityDraw, part: &ModelPart, texture: &str, tint: u32) -> bool {
+    fn draw_model_part(&self, draw: &mut (dyn mod_api::BlockEntityDrawContext + '_), part: &ModelPart, texture: &str, tint: u32) -> bool {
         false
     }
     fn fill(&self, batch: &mut HudBatch, rect: [f32; 4], argb: u32) {
@@ -568,7 +567,7 @@ pub struct PlayerWho<'a> {
 pub struct PlayerSubmitEvent<'a> {
     pub who: PlayerWho<'a>,
     pub player: PlayerPose,
-    pub draw: &'a mut BlockEntityDraw,
+    pub draw: &'a mut (dyn mod_api::BlockEntityDrawContext + 'a),
 }
 
 /// A pose em que o jogo desenha o jogador.
@@ -585,7 +584,7 @@ pub struct PlayerPose {
 
 /// O desenho do mundo onde o mod põe modelos (os braços em primeira pessoa).
 pub struct WorldSubmitEvent<'a> {
-    pub draw: &'a mut BlockEntityDraw,
+    pub draw: &'a mut (dyn mod_api::BlockEntityDrawContext + 'a),
 }
 
 pub struct EntityOutlineEvent<'a> {

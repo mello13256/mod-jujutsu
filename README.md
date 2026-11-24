@@ -371,20 +371,11 @@ O painel só mostra os pactos do personagem que você está usando.
   (técnicas e socos), junto com a Força.
 - Com o domínio aberto, o pacto do domínio não pode ser aceito: feche-o antes.
 
-## Feridas
-
-Todo mob cortado fica com a ferida no corpo, no lugar e no ângulo em que o corte passou: a
-borda da pele, o músculo e, nos trechos mais fundos, o osso, com sangue escorrendo para baixo
-por alguns segundos. A ferida anda e vira junto com o mob e fica até ele morrer ou sumir de
-vista. Cada mob mostra as oito feridas mais recentes, e até 8 mobs feridos aparecem ao
-mesmo tempo. No golpe, o corpo do mob pisca em vermelho.
-
 ## Cleave
 
 1. Mire num mob a até 5 blocos e **segure G** (tecla trocável em Opções > Controles).
 2. O mob é preso diante de você, com o peito na mira, e segue a mira enquanto G estiver segurado.
-3. Ele leva um corte pequeno a cada 3 ticks, cada vez mais fundo: de arranhões a osso em uns
-   doze cortes. O corpo mostra os oito cortes mais recentes.
+3. Ele leva um corte pequeno a cada 3 ticks, cada um com o seu risco vermelho no ar.
 4. O dano entra duas vezes por segundo: 4 com a barra vazia, até 16 com ela cheia.
 5. **Solte G** para largar o mob, que leva um empurrão para a frente.
 
@@ -398,8 +389,8 @@ cheia, antes da Força e da árvore.
 Aperte e segure **G olhando para cima** (mais de 50° acima do horizonte): em vez de agarrar,
 os cortes do domínio aparecem numa esfera em volta de você, de **3 blocos de raio** com a
 barra vazia até **18 blocos** com ela cheia. Todo mob dentro leva dano moderado duas vezes por
-segundo (7 com a barra vazia, até 21 com ela cheia, antes da Força) e fica com as feridas no
-corpo. Dura enquanto G fica segurado, até **4 segundos**; gasta a energia do Cleave
+segundo (7 com a barra vazia, até 21 com ela cheia, antes da Força), com riscos de corte
+no corpo. Dura enquanto G fica segurado, até **4 segundos**; gasta a energia do Cleave
 segurando e, ao acabar, começa a recarga do Cleave. Não mexe no terreno.
 
 ## Barra de energia
@@ -479,7 +470,7 @@ aparece abaixo da mira, com uma marca nos 3 segundos.
 Dentro do domínio, por 15 segundos:
 
 - todo mob apanha de cortes sem parar (o dano das opções, até o triplo com a barra cheia),
-  e os mais próximos ficam com as feridas no corpo;
+  com riscos de corte nos mais próximos;
 - no domínio **aberto**, cortes finos caem no terreno em direções sorteadas e fatiam o que
   está de pé (árvores, construções, morros) do chão dos seus pés para cima, ao longo de
   linhas: o resto fica, e não volta. Só o chão do santuário (e em volta de você) é limpo de
@@ -792,9 +783,11 @@ com a GPU e só funciona no Nightly exato em que foi feito.
 O menu (N) continua no mundo: os painéis ficam em arco na sua frente e a mira escolhe o botão,
 mas o desenho é feito no HUD, com a fonte do jogo.
 
-Ainda sem a API nova: o corpo do jogador posado pelas técnicas em terceira pessoa e os braços em
-primeira pessoa (o jogo desenha o jogador normal), a câmera que inclina no pouso da teia (só
-desce) e as feridas desenhadas nos mobs.
+O corpo posado pelas técnicas usa a pele do seu perfil, pelo nome que o jogo dá a ela; enquanto
+ela não chega, a pele padrão. Os braços em primeira pessoa são desenhados com a mão do jogo, no
+mesmo campo de visão dela.
+
+As feridas desenhadas nos mobs saíram na 0.31.0: os cortes continuam com os riscos no ar.
 
 ## O que cada arquivo faz
 
@@ -814,8 +807,9 @@ desce) e as feridas desenhadas nos mobs.
 - `src/rig.rs`: o corpo do jogador montado em código, com cotovelos e joelhos, e a
   cinemática inversa que dobra cada membro até a mão ou o pé chegar onde a pose quer.
 - `src/anim.rs`: as poses de cada técnica e como elas entram e saem.
-- `src/limbs.rs`: o corpo no jogo: as poses e a câmera do pouso (o desenho do corpo ainda
-  não tem caminho na API nova).
+- `src/limbs.rs`: o corpo no jogo: o desenho em terceira pessoa, os braços em primeira, a mão
+  do jogo escondida e a câmera do pouso.
+- `src/skin.rs`: a pele do jogador pelo perfil, com o nome que o jogo dá a ela no atlas.
 - `src/floor.rs`: o piso do domínio fechado: guarda o chão, põe o piso e devolve o chão.
 - `src/aura.rs`: a aura de energia em volta do corpo.
 - `src/progress.rs`: nível, XP, status e o que cada um vale; gastos e recargas.
@@ -829,7 +823,7 @@ desce) e as feridas desenhadas nos mobs.
 - `src/gates.rs`: os Portões: a lista, a barreira, as ondas e as recompensas.
 - `src/domain.rs`: a expansão de domínio: concentração, barreira, cortes e terreno.
 - `src/shrine.rs`: o tamanho do santuário no chão.
-- `src/wounds.rs`: as feridas, guardadas no referencial do corpo de cada mob.
+- `src/body.rs`: o referencial do corpo de um mob, onde os riscos dos cortes nascem.
 - `src/nuke.rs`: o alcance e a tabela da Nuke do Orbital Laser (o relevo em volta).
 - `assets/sukuna/shaders/pipeline/`: os shaders dos pipelines (`glow`, `orb`, `smoke`).
 - `NOTICE`: o crédito e a licença do Orbital Laser.

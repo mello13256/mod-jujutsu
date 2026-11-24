@@ -7,7 +7,8 @@
 - **Desenho refeito com a API:** os traços, os cortes, a flecha de fogo, as esferas do Gojo, as ondas, o Black Flash, a aura e as explosões são desenhados pelos shaders do próprio mod. Os efeitos que entortavam a imagem do mundo (a lente do Azul, o vidro do Mugen), o modelo do santuário e a Nuke completa vão para um pacote visual separado, que vem depois.
 - **Menu (N):** os painéis continuam no mundo e a mira escolhe o botão; o desenho é feito no HUD, com a fonte do jogo.
 - **Teclas** agora ficam em **Opções > Controles** (grupo Jujutsu Horizon), e as opções (destruição de blocos, efeitos da explosão) em **Opções > Mods > Jujutsu Horizon > Config**, além do painel CONFIG do menu.
-- **Ainda não voltou:** o corpo posado pelas técnicas e os braços em primeira pessoa (o jogo desenha o jogador normal), as feridas desenhadas nos mobs e a inclinação da câmera no pouso da teia. A jogabilidade é a mesma.
+- O corpo posado pelas técnicas, os braços em primeira pessoa e a câmera do pouso da teia continuam. A pele do corpo vem do seu perfil; enquanto ela não carrega, aparece a pele padrão.
+- **As feridas nos mobs saíram.** Os cortes do Cleave, do redemoinho e do domínio continuam com os riscos vermelhos no ar.
 
 ## 0.30.3 — 2026-11-23
 

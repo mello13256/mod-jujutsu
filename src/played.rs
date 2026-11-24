@@ -948,64 +948,6 @@ fn the_mod_lists_itself_with_its_key_and_settings() {
     assert!(buttons[0].ends_with("NÃO"));
 }
 
-#[test]
-fn a_cut_leaves_a_wound_that_follows_the_mob() {
-    // O mod fica com o teste, para as feridas serem lidas depois de cada passo.
-    let the_mod: &'static crate::Mod = Box::leak(Box::new(crate::Mod::new()));
-    let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Shared(the_mod))];
-    let mut game = Game::new();
-    // O zumbi está virado de lado, para o giro contar.
-    game.entities[0].yaw = 90.0;
-    draw_and_fire(&mut game, &mods);
-    for _ in 0..20 {
-        tick(&mut game, &mods);
-    }
-
-    {
-        let s = the_mod.state.lock().unwrap();
-        let ids: Vec<u32> = s.wounds.mobs.iter().map(|mob| mob.id).collect();
-        assert!(ids.contains(&7) && ids.contains(&11), "{ids:?}");
-        assert_eq!(ids.len(), 2, "a vaca e o item não foram cortados: {ids:?}");
-        let zombie = s.wounds.mobs.iter().find(|mob| mob.id == 7).unwrap();
-        assert_eq!(zombie.wounds.len(), 1);
-        let wound = zombie.wounds[0];
-        // Um corte horizontal na altura dos olhos: 1,62 acima dos pés do zumbi, em qualquer
-        // ponto do corpo e seja qual for o giro dele.
-        assert!(wound.normal[1].abs() > 0.999, "{wound:?}");
-        assert!(wound.distance([0.0, 1.62, 0.0]).abs() < 1e-3, "{wound:?}");
-        assert!(wound.distance([0.2, 1.62, -0.25]).abs() < 1e-3);
-        assert!((wound.distance([0.0, 1.0, 0.0]).abs() - 0.62).abs() < 1e-3);
-        assert_eq!(zombie.origin, [0.5, 64.0, 6.5]);
-        assert_eq!(zombie.yaw, 90.0);
-    }
-
-    // O zumbi anda e vira: a cada quadro a ferida sabe onde o corpo está.
-    game.entities[0].position = [4.5, 64.0, 9.5];
-    game.entities[0].yaw = 200.0;
-    dispatch_frame(&mut game, &mods, Duration::from_millis(16));
-    {
-        let s = the_mod.state.lock().unwrap();
-        let zombie = s.wounds.mobs.iter().find(|mob| mob.id == 7).unwrap();
-        assert_eq!(zombie.origin, [4.5, 64.0, 9.5]);
-        assert_eq!(zombie.yaw, 200.0);
-        // O esqueleto, que o jogo de mentira não acha pelo id, fica onde foi ferido.
-        let skeleton = s.wounds.mobs.iter().find(|mob| mob.id == 11).unwrap();
-        assert_eq!(skeleton.origin, [-1.5, 64.0, 6.5]);
-    }
-
-    // Um segundo corte no mesmo mob é uma segunda ferida.
-    game.entities[0].position = [0.5, 64.0, 6.5];
-    draw_and_fire(&mut game, &mods);
-    for _ in 0..20 {
-        tick(&mut game, &mods);
-    }
-    let s = the_mod.state.lock().unwrap();
-    assert_eq!(
-        s.wounds.mobs.iter().find(|mob| mob.id == 7).unwrap().wounds.len(),
-        2
-    );
-}
-
 /// Um zumbi a três blocos, bem na mira.
 fn game_with_a_mob_in_reach() -> Game {
     let mut game = Game::new();
@@ -1038,19 +980,14 @@ fn cleave_holds_the_mob_and_cuts_it_while_the_key_is_down() {
     assert!((held_at[0] - 0.5).abs() < 1e-9 && (held_at[2] - 2.8).abs() < 1e-9, "{held_at:?}");
     assert!((held_at[1] - (65.62 - 1.95 * 0.62)).abs() < 1e-9, "{held_at:?}");
 
-    // Um corte a cada três ticks; o corpo mostra os oito mais recentes, cada vez mais fundos.
+    // Um corte a cada três ticks, cada um com o seu risco no ar perto do corpo do zumbi.
     {
         let s = the_mod.state.lock().unwrap();
-        let zombie = s.wounds.mobs.iter().find(|mob| mob.id == 7).unwrap();
-        assert_eq!(zombie.wounds.len(), 8);
         assert_eq!(s.grab.as_ref().unwrap().cuts, 10);
-        let depths: Vec<u8> = zombie.wounds.iter().map(|w| w.depth).collect();
-        assert!(depths.windows(2).all(|w| w[0] <= w[1]), "{depths:?}");
-        assert_eq!(*depths.last().unwrap(), 2);
-        // Cada ferida passa por dentro do corpo do zumbi.
-        for wound in &zombie.wounds {
-            assert!(wound.a[1] > 0.0 && wound.a[1] < 2.3, "{wound:?}");
-            assert!(wound.a[0].abs() < 0.6 && wound.a[2].abs() < 0.6, "{wound:?}");
+        assert!(!s.nicks.is_empty());
+        for nick in &s.nicks {
+            let middle = crate::math::mul(crate::math::add(nick.a, nick.b), 0.5);
+            assert!(crate::math::len(crate::math::sub(middle, held_at)) < 2.5, "{middle:?}");
         }
     }
     // Dano duas vezes por segundo, um terço do dano de um corte desenhado.
@@ -1385,8 +1322,6 @@ fn a_full_bar_makes_cleave_cut_every_tick_and_hit_harder() {
     {
         let s = the_mod.state.lock().unwrap();
         assert_eq!(s.grab.as_ref().unwrap().cuts, 12, "um corte por tick");
-        let zombie = s.wounds.mobs.iter().find(|mob| mob.id == 7).unwrap();
-        assert_eq!(zombie.wounds.last().unwrap().depth, 3, "já no osso");
     }
     let hurt: Vec<&String> = game.commands.iter().filter(|c| c.contains("000000000007")).collect();
     assert!(hurt.iter().all(|c| c.contains(" 16 minecraft:player_attack")), "{hurt:#?}");
@@ -1485,7 +1420,7 @@ fn the_domain_cuts_every_mob_inside_and_slices_the_terrain_in_lines() {
     {
         let s = the_mod.state.lock().unwrap();
         assert!(!s.cuts.is_empty(), "os riscos no ar");
-        assert!(!s.wounds.is_empty(), "as feridas nos corpos");
+        assert!(!s.nicks.is_empty(), "os riscos nos corpos");
     }
     for _ in 0..260 {
         tick(&mut game, &mods);
@@ -2532,9 +2467,6 @@ fn the_world_cut_needs_the_whole_dismantle_branch_and_two_seconds_of_hold() {
     for _ in 0..3 {
         tick(&mut game, &mods);
     }
-    let s = the_mod.state.lock().unwrap();
-    assert!(s.wounds.mobs.iter().any(|m| m.id == 7), "o zumbi da frente leva o corte");
-    drop(s);
     assert!(game.commands.iter().any(|c| c.contains("4000")), "{:?}", game.commands);
     // E ignora qualquer defesa: o dano é do tipo que atravessa armadura e invulnerabilidade.
     assert!(game.commands.iter().any(|c| c.contains("4000 minecraft:out_of_world by @a")), "{:?}", game.commands);
@@ -2669,7 +2601,7 @@ fn cleave_looking_up_whirls_cuts_around_the_player_for_four_seconds() {
             let middle = crate::math::mul(crate::math::add(cut.a, cut.b), 0.5);
             crate::math::len(crate::math::sub(middle, [0.5, 65.0, 0.5])) <= 3.0 + 1e-6
         }));
-        assert!(s.wounds.mobs.iter().any(|mob| mob.id == 20), "as feridas no zumbi de perto");
+        assert!(!s.nicks.is_empty(), "os riscos no zumbi de perto");
     }
     let hurt = |game: &Game, id: &str| game.commands.iter().filter(|c| c.contains(id)).cloned().collect::<Vec<_>>();
     let near = hurt(&game, "-000000000014");
